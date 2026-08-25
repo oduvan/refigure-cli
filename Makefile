@@ -9,8 +9,10 @@ TARGETS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windo
 build:
 	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/refigure
 
+# -count=1 defeats the test cache. The command tests build the binary inside
+# TestMain, so the cache cannot tell when their subject has changed.
 test:
-	go test -race ./...
+	go test -race -count=1 ./...
 
 fmt:
 	gofmt -w .

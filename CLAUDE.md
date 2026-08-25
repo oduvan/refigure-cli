@@ -104,8 +104,9 @@ itself.
 
 ## Testing
 
-`go test ./...` — no fixtures on disk, every test builds its own project or
-image in memory.
+`make test` — 47 tests, no fixtures on disk; every test builds its own project
+or image. **Run it through `make`, not as a bare `go test ./...`**: see the
+caching note at the end of this section.
 
 - `internal/format` — a hand-written project file, unknown fields ignored,
   `scale` as a number or `original`, a broken document reporting its line, a
@@ -118,6 +119,18 @@ image in memory.
   screen (60,50) lands at (10,10) inside a cut starting at (50,40), an arrow
   head is wider than its shaft, a dashed line leaves gaps, a missing font is
   reported, a bad colour is an error.
+- `cmd/refigure` — the command surface, driven as a subprocess: exit codes (2
+  for an unreadable project, 1 for a failure), the line number in a broken file,
+  `--out`, `--only`, `--dry-run` writing nothing, `--json` naming files that are
+  really there, `--format`/`--quality` producing a decodable JPEG, `--scale`
+  downscaling and refusing to enlarge, a missing font warning without failing,
+  and WebP failing with a message that names the format.
+
+**The command tests build the binary inside `TestMain`, so `go test` cannot see
+what they depend on and will serve a cached pass after a real change.** That was
+confirmed by mutation, not assumed: breaking the exit code passes under a bare
+`go test ./...` and fails under `-count=1`. The Makefile and CI both pass
+`-count=1`; do not remove it, and do not trust a bare `go test` in this repo.
 
 CI runs the tests on Linux, macOS and Windows, because font resolution and
 rasterising are not identical across them, and cross-compiles all six release

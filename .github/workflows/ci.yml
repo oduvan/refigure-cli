@@ -37,7 +37,9 @@ jobs:
           fi
 
       - run: go vet ./...
-      - run: go test -race ./...
+      # -count=1: the command tests build the binary in TestMain, which the
+      # test cache cannot see, so a cached pass would be meaningless.
+      - run: go test -race -count=1 ./...
 
   build:
     name: build all targets
