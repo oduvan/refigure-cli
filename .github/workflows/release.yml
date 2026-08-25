@@ -88,7 +88,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { goos: darwin,  goarch: amd64, runner: macos-13 }
+          - { goos: darwin,  goarch: amd64, runner: macos-latest }
           - { goos: darwin,  goarch: arm64, runner: macos-latest }
           - { goos: linux,   goarch: amd64, runner: ubuntu-latest }
           - { goos: linux,   goarch: arm64, runner: ubuntu-24.04-arm }
@@ -117,6 +117,18 @@ jobs:
       # draws figures, resamples, and encodes PNG and WebP. If a target is
       # broken — a bad architecture, a WASM runtime that will not start — this
       # is where it shows, before the release exists.
+      # The Intel macOS runners are scarce enough to hold a release up for half
+      # an hour, so the amd64 binary is checked on the arm64 runner through
+      # Rosetta. If Rosetta is not there the step fails loudly rather than
+      # quietly proving nothing.
+      - name: Check Rosetta is available
+        if: matrix.goos == 'darwin' && matrix.goarch == 'amd64'
+        run: |
+          arch -x86_64 /usr/bin/true || {
+            echo "::error::this runner cannot execute x86_64 binaries"
+            exit 1
+          }
+
       - name: Export on the target platform
         shell: bash
         run: |
