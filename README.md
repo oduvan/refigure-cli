@@ -150,8 +150,6 @@ or commit the `.ttf` next to your project and pass `--font-dir`.
 
 ## Limits
 
-- **WebP output is not supported yet.** Every Go WebP encoder needs cgo, which
-  would cost the single static binary. Reading `.webp` screenshots works.
 - **Downscaling is not pixel-identical to the desktop app.** This tool uses
   Catmull-Rom; the desktop uses sharp's Lanczos3. Sharp edges can differ by a
   hair at the same size.

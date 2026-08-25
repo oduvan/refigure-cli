@@ -75,11 +75,14 @@ The dependency direction is `main → export → render → format/geom`. Nothin
 - **Downscale never enlarges.** A `--scale` wider than the cut is ignored, not
   applied. `export.Plan` decides the size; `render.Resize` only obeys.
 - **No cgo, ever.** The point of the binary is that it runs on a build machine
-  with nothing installed. This is why WebP output is missing: every Go WebP
-  encoder needs cgo. Decoding `.webp` screenshots is pure Go and works.
-- **Stdlib first.** Four dependencies, all pure Go: `fogleman/gg` (rasteriser),
+  with nothing installed. When a format needs a C library, the answer is to run
+  that library another way, not to give up the static binary — WebP is encoded
+  by libwebp compiled to WASM (`gen2brain/webp` over wazero), which costs about
+  3.5 MB and keeps `CGO_ENABLED=0` on all six targets.
+- **Stdlib first.** Five dependencies, all pure Go: `fogleman/gg` (rasteriser),
   `golang/freetype` (TrueType faces), `golang.org/x/image` (resampling, WebP
-  decode, the fallback font), `gopkg.in/yaml.v3`. Adding a fifth needs a reason.
+  decode, the fallback font), `gen2brain/webp` (WebP encode), `gopkg.in/yaml.v3`.
+  Adding a sixth needs a reason.
 
 ## Where the two renderers can drift
 
@@ -124,7 +127,7 @@ caching note at the end of this section.
   `--out`, `--only`, `--dry-run` writing nothing, `--json` naming files that are
   really there, `--format`/`--quality` producing a decodable JPEG, `--scale`
   downscaling and refusing to enlarge, a missing font warning without failing,
-  and WebP failing with a message that names the format.
+  and WebP written at a size that actually changes with `--quality`.
 
 **The command tests build the binary inside `TestMain`, so `go test` cannot see
 what they depend on and will serve a cached pass after a real change.** That was
@@ -162,10 +165,7 @@ users how to get past Gatekeeper.
   binary yet; that needs the binary shipped inside the app bundle. Until then
   the two renderers are genuinely two implementations, and the fidelity notes
   above are the risk register. Tracked as
-  [refigure#34](https://github.com/oduvan/refigure/issues/34), which also has to
-  decide what happens to WebP.
-- **WebP output** returns a clear error rather than pretending. Revisit only if
-  a pure-Go encoder appears.
+  [refigure#34](https://github.com/oduvan/refigure/issues/34).
 
 ## Conventions
 

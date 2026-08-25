@@ -12,9 +12,12 @@ on:
 permissions:
   contents: write
 
+env:
+  VERSION: ${{ github.event.inputs.tag || github.ref_name }}
+
 jobs:
   build:
-    name: ${{ matrix.goos }}-${{ matrix.goarch }}
+    name: build ${{ matrix.goos }}-${{ matrix.goarch }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -32,22 +35,27 @@ jobs:
           go-version: '1.23'
           cache: true
 
+      # Every target is cross-compiled from one machine, so the six binaries
+      # differ only in GOOS/GOARCH and not in the toolchain that made them.
       - name: Build
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          # No cgo, so every target is a single static binary that needs
-          # nothing installed on the machine that runs it. This is the whole
-          # reason the tool is written in Go.
           CGO_ENABLED: '0'
         run: |
-          version="${{ github.event.inputs.tag || github.ref_name }}"
           name="refigure"
           [ "$GOOS" = "windows" ] && name="refigure.exe"
           mkdir -p dist
-          go build -trimpath -ldflags "-s -w -X main.Version=$version" -o "dist/$name" ./cmd/refigure
+          go build -trimpath -ldflags "-s -w -X main.Version=$VERSION" -o "dist/$name" ./cmd/refigure
 
-          base="refigure_${version}_${GOOS}_${GOARCH}"
+          # Prove the file really is for the target before anyone downloads it.
+          # `go version -m` reads the build info stamped into the binary.
+          info=$(go version -m "dist/$name")
+          echo "$info" | grep -q "GOOS=$GOOS" || { echo "::error::built binary is not $GOOS"; echo "$info"; exit 1; }
+          echo "$info" | grep -q "GOARCH=$GOARCH" || { echo "::error::built binary is not $GOARCH"; echo "$info"; exit 1; }
+          echo "$info" | grep -q "CGO_ENABLED=0" || { echo "::error::built binary is not static"; echo "$info"; exit 1; }
+
+          base="refigure_${VERSION}_${GOOS}_${GOARCH}"
           cp README.md LICENSE dist/
           cd dist
           if [ "$GOOS" = "windows" ]; then
@@ -58,12 +66,74 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: refigure-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: pkg-${{ matrix.goos }}-${{ matrix.goarch }}
           path: refigure_*
           if-no-files-found: error
 
-  release:
+  # Nothing is published until every binary has exported a real image on the
+  # operating system and architecture it was built for. Cross-compiling is not
+  # evidence that a binary runs.
+  verify:
+    name: verify ${{ matrix.goos }}-${{ matrix.goarch }} on ${{ matrix.runner }}
     needs: build
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: darwin,  goarch: amd64, runner: macos-13 }
+          - { goos: darwin,  goarch: arm64, runner: macos-latest }
+          - { goos: linux,   goarch: amd64, runner: ubuntu-latest }
+          - { goos: linux,   goarch: arm64, runner: ubuntu-24.04-arm }
+          - { goos: windows, goarch: amd64, runner: windows-latest }
+          - { goos: windows, goarch: arm64, runner: windows-11-arm }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: pkg-${{ matrix.goos }}-${{ matrix.goarch }}
+
+      - name: Unpack
+        shell: bash
+        run: |
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            unzip -q refigure_*.zip
+          else
+            tar -xzf refigure_*.tar.gz
+            chmod +x refigure
+          fi
+
+      # The smoke test is a real export of testdata/smoke: it decodes a PNG,
+      # draws figures, resamples, and encodes PNG and WebP. If a target is
+      # broken — a bad architecture, a WASM runtime that will not start — this
+      # is where it shows, before the release exists.
+      - name: Export on the target platform
+        shell: bash
+        run: |
+          bin=./refigure
+          [ "${{ matrix.goos }}" = "windows" ] && bin=./refigure.exe
+
+          reported=$("$bin" version)
+          [ "$reported" = "$VERSION" ] || { echo "::error::binary reports $reported, expected $VERSION"; exit 1; }
+
+          "$bin" validate testdata/smoke
+          "$bin" export testdata/smoke --out smoke-png
+          "$bin" export testdata/smoke --out smoke-webp --format webp --quality 50
+          "$bin" export testdata/smoke --out smoke-small --scale 160
+
+          for file in smoke-png/hero.png smoke-png/title.png smoke-webp/hero.webp smoke-small/hero.png; do
+            [ -s "$file" ] || { echo "::error::$file was not written"; exit 1; }
+          done
+
+          # --scale must have actually resampled, not just copied.
+          full=$(wc -c < smoke-png/hero.png)
+          small=$(wc -c < smoke-small/hero.png)
+          [ "$small" -lt "$full" ] || { echo "::error::--scale 160 produced $small bytes against $full unscaled"; exit 1; }
+
+          echo "$bin exported on ${{ matrix.runner }}: $(ls smoke-png smoke-webp smoke-small | tr '\n' ' ')"
+
+  release:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -72,6 +142,8 @@ jobs:
           path: artifacts
           merge-multiple: true
 
+      # The desktop app downloads these and refuses to run one whose hash does
+      # not match, so checksums.txt is part of the product, not a courtesy.
       - name: Checksums
         run: |
           cd artifacts
@@ -82,9 +154,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${{ github.event.inputs.tag || github.ref_name }}"
-          gh release create "$version" \
-            --title "$version" \
+          gh release create "$VERSION" \
+            --title "$VERSION" \
             --generate-notes \
             --verify-tag \
             artifacts/refigure_* artifacts/checksums.txt

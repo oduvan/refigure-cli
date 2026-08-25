@@ -27,6 +27,8 @@ import (
 	"testing"
 
 	_ "image/jpeg"
+
+	_ "golang.org/x/image/webp"
 )
 
 const testVersion = "v9.9.9-test"
@@ -148,6 +150,15 @@ func size(t *testing.T, path string) (int, int) {
 		t.Fatalf("%s is not a readable image: %v", filepath.Base(path), err)
 	}
 	return config.Width, config.Height
+}
+
+func fileSize(t *testing.T, path string) int64 {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("%s was not written: %v", filepath.Base(path), err)
+	}
+	return info.Size()
 }
 
 func names(t *testing.T, dir string) []string {
@@ -401,15 +412,27 @@ func TestAMissingFontWarnsAndStillExports(t *testing.T) {
 	}
 }
 
-// WebP cannot be encoded without cgo. Saying so beats writing a PNG with the
-// wrong extension.
-func TestWebPOutputFailsClearly(t *testing.T) {
+// WebP is encoded by libwebp compiled to WASM, so it is real lossy WebP and
+// the quality setting means what it means everywhere else.
+func TestWebPIsWrittenAndQualityChangesIt(t *testing.T) {
 	dir := project(t)
-	_, stderr, code := run(t, "export", dir, "--format", "webp")
-	if code != 1 {
-		t.Fatalf("exit %d, want 1", code)
+	low := filepath.Join(t.TempDir(), "low")
+	high := filepath.Join(t.TempDir(), "high")
+
+	if _, _, code := run(t, "export", dir, "--out", low, "--format", "webp", "--quality", "20"); code != 0 {
+		t.Fatalf("exit %d", code)
 	}
-	if !strings.Contains(strings.ToLower(stderr), "webp") {
-		t.Errorf("the error should name the format, got %q", stderr)
+	if _, _, code := run(t, "export", dir, "--out", high, "--format", "webp", "--quality", "95"); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+
+	// The standard decoder must accept it, at the right size.
+	if w, h := size(t, filepath.Join(low, "wide.webp")); w != 400 || h != 300 {
+		t.Errorf("wide.webp is %dx%d", w, h)
+	}
+
+	small, big := fileSize(t, filepath.Join(low, "wide.webp")), fileSize(t, filepath.Join(high, "wide.webp"))
+	if small >= big {
+		t.Errorf("quality 20 produced %d bytes and quality 95 produced %d — the setting is being ignored", small, big)
 	}
 }

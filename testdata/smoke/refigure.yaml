@@ -1,0 +1,31 @@
+# The fixture the release pipeline exports on every target OS before publishing.
+# Small on purpose: one screen, two cuts, one figure of each kind that matters.
+version: 1
+name: smoke
+export:
+  dest: out
+  format: png
+  quality: 90
+  scale: original
+screens:
+  - id: scr_smoke
+    name: hero
+    file: screen.png
+    width: 320
+    height: 200
+    cuts:
+      - id: cut_full
+        name: hero
+        rect: { x: 0, y: 0, w: 320, h: 200 }
+      - id: cut_title
+        name: title
+        rect: { x: 0, y: 0, w: 320, h: 40 }
+    figures:
+      - id: fig_box
+        type: rect
+        cut: cut_title
+        rect: { x: 12, y: 10, w: 120, h: 20 }
+      - id: fig_arrow
+        type: arrow
+        from: { x: 40, y: 120 }
+        to: { x: 200, y: 90 }
