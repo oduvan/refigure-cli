@@ -161,11 +161,14 @@ users how to get past Gatekeeper.
   `refigure.yaml` and this tool ignores the keys that are not its business —
   which is why the split can happen later without breaking anything here.
   Tracked as [refigure#35](https://github.com/oduvan/refigure/issues/35).
-- **The desktop app still renders its own exports.** It does not call this
-  binary yet; that needs the binary shipped inside the app bundle. Until then
-  the two renderers are genuinely two implementations, and the fidelity notes
-  above are the risk register. Tracked as
-  [refigure#34](https://github.com/oduvan/refigure/issues/34).
+- **The desktop app now exports through this binary.** It downloads the pinned
+  release for its platform, checks it against `checksums.txt`, and runs it —
+  which is why releases publish a bare binary next to each archive, and why the
+  checksums file is part of the product rather than a courtesy. Two consequences
+  for changes here: the app pins an exact version, so a release does not reach
+  users until they get an app release too; and `--only-id`, `--progress`,
+  `--json` and the exit codes are a contract with a program, not just a
+  convenience for people.
 
 ## Conventions
 
