@@ -64,6 +64,13 @@ jobs:
             tar -czf "../$base.tar.gz" "$name" README.md LICENSE
           fi
 
+          # The archive is for people. The bare binary is for the desktop app,
+          # which downloads one file, checks its hash and runs it — no unpacker
+          # in an Electron main process.
+          suffix=""
+          [ "$GOOS" = "windows" ] && suffix=".exe"
+          cp "$name" "../${base}${suffix}"
+
       - uses: actions/upload-artifact@v4
         with:
           name: pkg-${{ matrix.goos }}-${{ matrix.goarch }}
@@ -116,21 +123,24 @@ jobs:
           reported=$("$bin" version)
           [ "$reported" = "$VERSION" ] || { echo "::error::binary reports $reported, expected $VERSION"; exit 1; }
 
+          # An --out that is not absolute resolves against the project folder,
+          # not the working directory, so these are absolute on purpose.
+          out="$PWD/smoke"
           "$bin" validate testdata/smoke
-          "$bin" export testdata/smoke --out smoke-png
-          "$bin" export testdata/smoke --out smoke-webp --format webp --quality 50
-          "$bin" export testdata/smoke --out smoke-small --scale 160
+          "$bin" export testdata/smoke --out "$out-png"
+          "$bin" export testdata/smoke --out "$out-webp" --format webp --quality 50
+          "$bin" export testdata/smoke --out "$out-small" --scale 160
 
-          for file in smoke-png/hero.png smoke-png/title.png smoke-webp/hero.webp smoke-small/hero.png; do
+          for file in "$out-png/hero.png" "$out-png/title.png" "$out-webp/hero.webp" "$out-small/hero.png"; do
             [ -s "$file" ] || { echo "::error::$file was not written"; exit 1; }
           done
 
           # --scale must have actually resampled, not just copied.
-          full=$(wc -c < smoke-png/hero.png)
-          small=$(wc -c < smoke-small/hero.png)
+          full=$(wc -c < "$out-png/hero.png")
+          small=$(wc -c < "$out-small/hero.png")
           [ "$small" -lt "$full" ] || { echo "::error::--scale 160 produced $small bytes against $full unscaled"; exit 1; }
 
-          echo "$bin exported on ${{ matrix.runner }}: $(ls smoke-png smoke-webp smoke-small | tr '\n' ' ')"
+          echo "exported on ${{ matrix.runner }}: $(ls "$out-png" "$out-webp" "$out-small" | tr '\n' ' ')"
 
   release:
     needs: verify

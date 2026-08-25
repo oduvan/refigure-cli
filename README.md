@@ -58,8 +58,10 @@ The project defaults to the current directory.
 | `--scale N` | Cap the width at N pixels. Never enlarges. |
 | `--original` | Ignore any downscale the project asks for. |
 | `--only NAMES` | Comma-separated cut or screen names. |
+| `--only-id IDS` | Comma-separated cut ids, for tools that must be exact. |
 | `--dry-run` | Print what would be written, write nothing. |
 | `--json` | Machine-readable output, for tools. |
+| `--progress` | Report each image on stderr as it is written. |
 | `--font-dir DIR` | Look here for fonts first. Repeatable. |
 
 Exit codes: `0` success, `1` failure, `2` the project file could not be read or

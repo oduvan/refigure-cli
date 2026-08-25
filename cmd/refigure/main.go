@@ -44,8 +44,10 @@ Export flags:
   --scale N        cap the width at N pixels; never enlarges
   --original       ignore any downscale the project asks for
   --only NAMES     comma-separated cut or screen names
+  --only-id IDS    comma-separated cut ids, for tools that need to be exact
   --dry-run        print what would be written, write nothing
   --json           machine-readable output, for tools
+  --progress       report each image on stderr as it is written
   --font-dir DIR   look here for fonts first; repeatable
 
 Exit codes:
@@ -93,8 +95,10 @@ func runExport(args []string) int {
 	scale := flags.Int("scale", 0, "max width in pixels")
 	original := flags.Bool("original", false, "ignore any downscale")
 	only := flags.String("only", "", "comma-separated cut or screen names")
+	onlyIDs := flags.String("only-id", "", "comma-separated cut ids")
 	dryRun := flags.Bool("dry-run", false, "print what would be written")
 	asJSON := flags.Bool("json", false, "machine-readable output")
+	progress := flags.Bool("progress", false, "report each image on stderr as it is written")
 	var fontDirs stringList
 	flags.Var(&fontDirs, "font-dir", "extra font directory")
 	dir := parseDir(flags, args)
@@ -107,6 +111,9 @@ func runExport(args []string) int {
 	opts := export.Options{Original: *original, MaxWidth: *scale}
 	if *only != "" {
 		opts.Only = strings.Split(*only, ",")
+	}
+	if *onlyIDs != "" {
+		opts.OnlyIDs = strings.Split(*onlyIDs, ",")
 	}
 	if *outputFormat != "" {
 		opts.Format = format.ExportFormat(*outputFormat)
@@ -192,6 +199,13 @@ func runExport(args []string) int {
 			return fail(fmt.Errorf("cut %q: %w", item.Cut.Name, err))
 		}
 		written = append(written, item.FileName)
+
+		// Progress goes to stderr so stdout stays exactly what it was — human
+		// text, or one JSON document. A caller wanting a progress bar reads
+		// these lines; anyone else never sees them.
+		if *progress {
+			fmt.Fprintf(os.Stderr, "progress %d/%d %s\n", len(written), len(plan.Items), item.FileName)
+		}
 	}
 
 	return report(*asJSON, dest, plan, written, false)

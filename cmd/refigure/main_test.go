@@ -352,6 +352,37 @@ func TestOnlySelectsByName(t *testing.T) {
 	}
 }
 
+// The app selects cuts by id, because two screens may hold cuts with the same
+// name and a name filter cannot tell them apart.
+func TestOnlyIDSelectsExactlyThatCut(t *testing.T) {
+	dir := project(t)
+	out := filepath.Join(t.TempDir(), "images")
+
+	if _, _, code := run(t, "export", dir, "--out", out, "--only-id", "cut_narrow"); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if got := names(t, out); len(got) != 1 || got[0] != "narrow.png" {
+		t.Errorf("got %v", got)
+	}
+}
+
+func TestProgressReportsEachImageOnStderr(t *testing.T) {
+	dir := project(t)
+	stdout, stderr, code := run(t, "export", dir, "--progress")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	for _, want := range []string{"progress 1/2 ", "progress 2/2 "} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("%q missing from stderr:\n%s", want, stderr)
+		}
+	}
+	// stdout must stay clean, so --json and --progress can be used together.
+	if strings.Contains(stdout, "progress") {
+		t.Errorf("progress leaked into stdout: %q", stdout)
+	}
+}
+
 func TestOnlyMatchingNothingIsAFailureNotAnEmptySuccess(t *testing.T) {
 	dir := project(t)
 	_, stderr, code := run(t, "export", dir, "--only", "nope")

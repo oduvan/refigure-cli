@@ -182,3 +182,31 @@ func TestStyleCascade(t *testing.T) {
 		t.Errorf("an unset slot falls back to the default, got %s", owned.FontFamily)
 	}
 }
+
+// Cut names are unique inside a screen but not across screens, so a tool that
+// means one specific cut has to say so by id.
+func TestOnlyIDsBeatANameSharedByTwoScreens(t *testing.T) {
+	project := &format.Project{
+		Export: format.ExportSettings{Format: format.FormatPNG},
+		Screens: []format.Screen{
+			{ID: "s1", Name: "login", Cuts: []format.Cut{{ID: "c1", Name: "hero", Rect: format.Rect{W: 10, H: 10}}}},
+			{ID: "s2", Name: "signup", Cuts: []format.Cut{{ID: "c2", Name: "hero", Rect: format.Rect{W: 10, H: 10}}}},
+		},
+	}
+
+	byName, err := Build(project, Options{Only: []string{"hero"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byName.Items) != 2 {
+		t.Fatalf("a name matches both cuts, got %d", len(byName.Items))
+	}
+
+	byID, err := Build(project, Options{OnlyIDs: []string{"c2"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byID.Items) != 1 || byID.Items[0].Screen.Name != "signup" {
+		t.Fatalf("an id must match exactly one cut, got %+v", byID.Items)
+	}
+}

@@ -38,6 +38,10 @@ var Extension = map[format.ExportFormat]string{
 type Options struct {
 	// Only limits the export to these cut or screen names. Empty means all.
 	Only []string
+	// OnlyIDs limits the export to these cut ids. Names can repeat across
+	// screens, so a tool driving this needs a way to say exactly which cut it
+	// means; a person on a command line does not. Empty means no id filter.
+	OnlyIDs []string
 	// Format, when set, overrides the project's own setting.
 	Format format.ExportFormat
 	// MaxWidth caps the output width. Zero means the project's setting applies.
@@ -69,6 +73,10 @@ func Build(project *format.Project, opts Options) (*Plan, error) {
 	for _, name := range opts.Only {
 		wanted[name] = true
 	}
+	wantedIDs := map[string]bool{}
+	for _, id := range opts.OnlyIDs {
+		wantedIDs[id] = true
+	}
 
 	plan := &Plan{}
 	seen := map[string]int{}
@@ -77,6 +85,9 @@ func Build(project *format.Project, opts Options) (*Plan, error) {
 		screen := &project.Screens[i]
 		for j := range screen.Cuts {
 			cut := &screen.Cuts[j]
+			if len(wantedIDs) > 0 && !wantedIDs[cut.ID] {
+				continue
+			}
 			if len(wanted) > 0 && !wanted[cut.Name] && !wanted[screen.Name] {
 				continue
 			}
