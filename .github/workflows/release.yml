@@ -1,0 +1,90 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build, e.g. v0.1.0'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.goos }}-${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          # No cgo, so every target is a single static binary that needs
+          # nothing installed on the machine that runs it. This is the whole
+          # reason the tool is written in Go.
+          CGO_ENABLED: '0'
+        run: |
+          version="${{ github.event.inputs.tag || github.ref_name }}"
+          name="refigure"
+          [ "$GOOS" = "windows" ] && name="refigure.exe"
+          mkdir -p dist
+          go build -trimpath -ldflags "-s -w -X main.Version=$version" -o "dist/$name" ./cmd/refigure
+
+          base="refigure_${version}_${GOOS}_${GOARCH}"
+          cp README.md LICENSE dist/
+          cd dist
+          if [ "$GOOS" = "windows" ]; then
+            zip -q "../$base.zip" "$name" README.md LICENSE
+          else
+            tar -czf "../$base.tar.gz" "$name" README.md LICENSE
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: refigure-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: refigure_*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Checksums
+        run: |
+          cd artifacts
+          sha256sum refigure_* > checksums.txt
+          cat checksums.txt
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="${{ github.event.inputs.tag || github.ref_name }}"
+          gh release create "$version" \
+            --title "$version" \
+            --generate-notes \
+            --verify-tag \
+            artifacts/refigure_* artifacts/checksums.txt
