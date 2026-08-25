@@ -103,10 +103,13 @@ jobs:
       - name: Unpack
         shell: bash
         run: |
+          # Only the executable. The archives also carry README.md and LICENSE,
+          # which are already here from the checkout — extracting those either
+          # clobbers them or, on Windows, stops to ask.
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            unzip -q refigure_*.zip
+            unzip -q -o refigure_*.zip refigure.exe
           else
-            tar -xzf refigure_*.tar.gz
+            tar -xzf refigure_*.tar.gz refigure
             chmod +x refigure
           fi
 
@@ -124,8 +127,14 @@ jobs:
           [ "$reported" = "$VERSION" ] || { echo "::error::binary reports $reported, expected $VERSION"; exit 1; }
 
           # An --out that is not absolute resolves against the project folder,
-          # not the working directory, so these are absolute on purpose.
-          out="$PWD/smoke"
+          # not the working directory, so these are absolute on purpose. On
+          # Windows that means a real Windows path: the binary is native, and
+          # does not read Git Bash's /d/a/... as absolute.
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            out="$(pwd -W)/smoke"
+          else
+            out="$PWD/smoke"
+          fi
           "$bin" validate testdata/smoke
           "$bin" export testdata/smoke --out "$out-png"
           "$bin" export testdata/smoke --out "$out-webp" --format webp --quality 50
