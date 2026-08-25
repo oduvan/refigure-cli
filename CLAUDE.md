@@ -144,10 +144,13 @@ users how to get past Gatekeeper.
   the desktop app cares about, with no overlap. Today there is one
   `refigure.yaml` and this tool ignores the keys that are not its business —
   which is why the split can happen later without breaking anything here.
+  Tracked as [refigure#35](https://github.com/oduvan/refigure/issues/35).
 - **The desktop app still renders its own exports.** It does not call this
   binary yet; that needs the binary shipped inside the app bundle. Until then
   the two renderers are genuinely two implementations, and the fidelity notes
-  above are the risk register.
+  above are the risk register. Tracked as
+  [refigure#34](https://github.com/oduvan/refigure/issues/34), which also has to
+  decide what happens to WebP.
 - **WebP output** returns a clear error rather than pretending. Revisit only if
   a pure-Go encoder appears.
 
