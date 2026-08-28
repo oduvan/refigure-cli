@@ -124,7 +124,17 @@ func runExport(args []string) int {
 		return fail(err)
 	}
 	if len(plan.Items) == 0 {
-		return fail(fmt.Errorf("nothing to export — the project has no cuts, or --only matched none"))
+		// Name whichever filter was actually used: a caller passing ids and
+		// being told about --only has to go and read the flags to find out
+		// which of the two it means.
+		switch {
+		case *onlyIDs != "":
+			return fail(fmt.Errorf("nothing to export — no cut in this project has one of those ids"))
+		case *only != "":
+			return fail(fmt.Errorf("nothing to export — --only %q matched no cut or screen", *only))
+		default:
+			return fail(fmt.Errorf("nothing to export — the project has no cuts"))
+		}
 	}
 
 	dest := *out

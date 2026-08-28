@@ -389,7 +389,20 @@ func TestOnlyMatchingNothingIsAFailureNotAnEmptySuccess(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
-	if !strings.Contains(stderr, "nothing to export") {
+	if !strings.Contains(stderr, "nothing to export") || !strings.Contains(stderr, "nope") {
+		t.Errorf("the message should name what was asked for, got %q", stderr)
+	}
+}
+
+// The message has to name the filter that was actually used. A caller passing
+// ids and being told about --only cannot tell which of the two it means.
+func TestAnUnmatchedIDSaysSoInItsOwnTerms(t *testing.T) {
+	dir := project(t)
+	_, stderr, code := run(t, "export", dir, "--only-id", "cut_nope")
+	if code != 1 {
+		t.Fatalf("exit %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "ids") || strings.Contains(stderr, "--only ") {
 		t.Errorf("stderr was %q", stderr)
 	}
 }

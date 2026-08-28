@@ -141,6 +141,13 @@ targets on every push so a broken target is found before a tag is cut.
 
 ## Releasing
 
+**A patch release may not change what a correct project renders as.** The
+desktop app upgrades itself inside a series without asking — v0.1.0 to v0.1.1,
+never to v0.2.0 — so a patch that moved a line by a pixel would change a user's
+exported images with no app release and no way to refuse it. Fixes, messages,
+performance and new flags are patches. Anything that changes the drawing, the
+file names, or the meaning of an existing flag is a new series.
+
 Tag and push:
 
 ```bash
