@@ -50,6 +50,14 @@ The dependency direction is `main → export → render → format/geom`. Nothin
 
 ## Invariants worth preserving
 
+- **The tool describes itself, and the description has to be true.** The most
+  likely caller is a program holding only this binary and no repository: `help`,
+  `<command> --help`, and `schema` (prose, `--example`, `--json`) are how it
+  learns the format. That makes the help a contract — a flag named there that
+  does not exist sends a caller down a path that fails — so a test offers the
+  real command every `--flag` the export help mentions, and another writes out
+  `schema --example` and validates *and* exports it. Change a flag and the help
+  changes in the same edit.
 - **This tool never writes `refigure.yaml`.** It reads the project and writes
   images. That is why none of the desktop app's careful serialisation —
   deterministic key order, comments kept with their entity by id — exists here,
@@ -122,7 +130,13 @@ caching note at the end of this section.
   screen (60,50) lands at (10,10) inside a cut starting at (50,40), an arrow
   head is wider than its shaft, a dashed line leaves gaps, a missing font is
   reported, a bad colour is an error.
-- `cmd/refigure` — the command surface, driven as a subprocess: exit codes (2
+- `cmd/refigure` — the command surface, driven as a subprocess. The
+  self-describing part: every command explains itself and exits 0, `help export`
+  and `export --help` agree, the help names no flag the binary lacks, the
+  printed example validates and exports, `schema --json` parses and defines the
+  types a caller has to get right, and the prose carries the rules that cannot
+  be guessed from the keys (screen coordinates, ownership, exclusion, the
+  cascade order). Then the rest: exit codes (2
   for an unreadable project, 1 for a failure), the line number in a broken file,
   `--out`, `--only`, `--dry-run` writing nothing, `--json` naming files that are
   really there, `--format`/`--quality` producing a decodable JPEG, `--scale`

@@ -42,11 +42,15 @@ go install github.com/oduvan/refigure-cli/cmd/refigure@latest
 ## Use
 
 ```
-refigure export [project] [flags]   write one image per cut
-refigure list   [project]           show the cuts and the file names they produce
-refigure validate [project]         check refigure.yaml, print nothing if it is fine
+refigure export   [project] [flags]   write one image per cut
+refigure list     [project] [flags]   what would be written, and at what size
+refigure validate [project] [flags]   check refigure.yaml
+refigure schema            [flags]    describe the project file format
 refigure version
+refigure help [command]
 ```
+
+Every command takes `--help` and `--json`.
 
 The project defaults to the current directory.
 
@@ -85,6 +89,21 @@ refigure export --dry-run --json       # for a script to read
 ```
 
 Fonts are the one thing to get right on a build machine — see below.
+
+## Writing a project file
+
+The tool describes its own format, so a script — or an agent holding only the
+binary — never has to guess:
+
+```bash
+refigure schema             # every key, what it means, and the two rules
+refigure schema --example   # a complete refigure.yaml that validates
+refigure schema --json      # the same as a JSON Schema
+```
+
+`refigure validate --json` then answers `{"ok":true,"screens":1,"cuts":2}`, or
+`{"ok":false,"error":{"message":"...","line":12}}` — on stdout either way, so
+there is one thing to parse.
 
 ## The project file
 

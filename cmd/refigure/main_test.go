@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -478,5 +479,176 @@ func TestWebPIsWrittenAndQualityChangesIt(t *testing.T) {
 	small, big := fileSize(t, filepath.Join(low, "wide.webp")), fileSize(t, filepath.Join(high, "wide.webp"))
 	if small >= big {
 		t.Errorf("quality 20 produced %d bytes and quality 95 produced %d — the setting is being ignored", small, big)
+	}
+}
+
+/* ------------------------- the self-describing surface ------------------------ */
+
+// The most likely caller is a program holding only this binary, with no
+// repository to read. Everything it needs to write a valid project file has to
+// come out of the tool itself, and has to be true.
+
+func TestEveryCommandExplainsItself(t *testing.T) {
+	for _, args := range [][]string{
+		{"help"},
+		{"--help"},
+		{"export", "--help"},
+		{"list", "--help"},
+		{"validate", "--help"},
+		{"schema", "--help"},
+		{"help", "export"},
+		{"help", "schema"},
+	} {
+		stdout, _, code := run(t, args...)
+		if code != 0 {
+			t.Errorf("%v exited %d", args, code)
+		}
+		if len(stdout) < 200 {
+			t.Errorf("%v printed %d bytes, which is not an explanation", args, len(stdout))
+		}
+	}
+}
+
+// `refigure help export` and `refigure export --help` must answer the same
+// question: a caller guessing either way should be right.
+func TestHelpForACommandMatchesItsOwnFlag(t *testing.T) {
+	viaHelp, _, _ := run(t, "help", "export")
+	viaFlag, _, _ := run(t, "export", "--help")
+	if viaHelp != viaFlag {
+		t.Error("`help export` and `export --help` printed different things")
+	}
+}
+
+// Help that names a flag the binary does not accept is worse than no help: it
+// sends a caller down a path that fails. Every --flag the export help mentions
+// is offered to the real command here.
+func TestExportHelpNamesOnlyRealFlags(t *testing.T) {
+	help, _, _ := run(t, "export", "--help")
+	dir := project(t)
+
+	named := map[string]bool{}
+	for _, match := range regexp.MustCompile(`--[a-z][a-z-]*`).FindAllString(help, -1) {
+		named[match] = true
+	}
+	if len(named) < 8 {
+		t.Fatalf("only found %d flags in the help, which cannot be right", len(named))
+	}
+
+	for flag := range named {
+		// `flag provided but not defined` is what an unknown flag produces.
+		_, stderr, _ := run(t, "export", dir, flag, "--dry-run")
+		if strings.Contains(stderr, "not defined") {
+			t.Errorf("the help offers %s, but export does not accept it", flag)
+		}
+	}
+}
+
+// The example is the thing an agent will copy. If it does not validate, the
+// tool has taught it to write a broken file.
+func TestSchemaExampleIsAValidProject(t *testing.T) {
+	example, _, code := run(t, "schema", "--example")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "refigure.yaml"), []byte(example), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := run(t, "validate", dir, "--json")
+	if code != 0 {
+		t.Fatalf("the printed example does not validate: exit %d, %s", code, stderr)
+	}
+
+	var result struct {
+		OK      bool `json:"ok"`
+		Screens int  `json:"screens"`
+		Cuts    int  `json:"cuts"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("validate --json is not JSON: %v", err)
+	}
+	if !result.OK || result.Screens != 1 || result.Cuts != 2 {
+		t.Errorf("got %+v", result)
+	}
+
+	// The example must also export, not merely parse — it is a worked example.
+	_, _, code = run(t, "export", dir, "--dry-run")
+	if code != 0 {
+		t.Error("the example project produces no export plan")
+	}
+}
+
+func TestSchemaJSONIsAJSONSchema(t *testing.T) {
+	stdout, _, code := run(t, "schema", "--json")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+
+	var schema map[string]any
+	if err := json.Unmarshal([]byte(stdout), &schema); err != nil {
+		t.Fatalf("not JSON: %v", err)
+	}
+	for _, key := range []string{"$schema", "title", "properties", "$defs"} {
+		if _, ok := schema[key]; !ok {
+			t.Errorf("the schema has no %q", key)
+		}
+	}
+
+	// The parts a caller most needs to get right.
+	defs, _ := schema["$defs"].(map[string]any)
+	for _, key := range []string{"figure", "cut", "screen", "style", "rect", "point"} {
+		if _, ok := defs[key]; !ok {
+			t.Errorf("$defs has no %q", key)
+		}
+	}
+}
+
+// The prose has to carry the two rules that are impossible to guess from the
+// keys alone, and that a program will otherwise get wrong.
+func TestSchemaProseCarriesTheRulesThatCannotBeGuessed(t *testing.T) {
+	stdout, _, code := run(t, "schema")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	for _, phrase := range []string{
+		"screen coordinates", // not cut coordinates
+		"belongs to that cut alone",
+		"overlaps",
+		"exclude",
+		"Resolution order",
+	} {
+		if !strings.Contains(stdout, phrase) {
+			t.Errorf("the format reference never mentions %q", phrase)
+		}
+	}
+}
+
+func TestValidateJSONReportsAFailureOnStdout(t *testing.T) {
+	dir := project(t)
+	broken := strings.Replace(projectFile, "name: demo", "name: demo: oops", 1)
+	if err := os.WriteFile(filepath.Join(dir, "refigure.yaml"), []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, code := run(t, "validate", dir, "--json")
+	if code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+
+	var result struct {
+		OK    bool `json:"ok"`
+		Error struct {
+			Message string `json:"message"`
+			Line    int    `json:"line"`
+		} `json:"error"`
+	}
+	// A caller asking for --json must not have to read stderr to learn it failed.
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("failure was not reported as JSON on stdout: %v", err)
+	}
+	if result.OK || result.Error.Line != 2 || result.Error.Message == "" {
+		t.Errorf("got %+v", result)
 	}
 }
