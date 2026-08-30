@@ -44,7 +44,7 @@ and with `--ignore-scripts`.
 
 ```bash
 # macOS (Apple silicon) — swap the platform for yours
-curl -sSL https://github.com/oduvan/refigure-cli/releases/download/v0.1.5/refigure_v0.1.5_darwin_arm64.tar.gz | tar -xz
+curl -sSL https://github.com/oduvan/refigure-cli/releases/download/v0.1.6/refigure_v0.1.6_darwin_arm64.tar.gz | tar -xz
 sudo mv refigure /usr/local/bin/
 ```
 
@@ -118,7 +118,7 @@ same four lines work on GitHub Actions, GitLab CI, Jenkins or a cron job:
 ```yaml
 - name: Regenerate tutorial images
   env:
-    REFIGURE_VERSION: v0.1.5
+    REFIGURE_VERSION: v0.1.6
   run: |
     set -euo pipefail
     asset="refigure_${REFIGURE_VERSION}_linux_amd64.tar.gz"
