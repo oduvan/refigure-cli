@@ -39,7 +39,9 @@ Go 1.23+. `CGO_ENABLED=0` everywhere — see the invariants.
 ```
 cmd/refigure/main.go    flags, subcommands, output (text and --json), exit codes
 internal/
-├── format/   reads refigure.yaml (project.go) and resolves the style cascade (style.go)
+├── format/   reads refigure.yaml (project.go), the style cascade (style.go),
+│             and the format's own description (schema.go)
+├── lint/     judges a project file: unknown keys, dangling references, geometry
 ├── geom/     rect maths, figure bounds, membership
 ├── export/   plan.go: what to write and under which name · write.go: encoding
 └── render/   render.go: draws a cut · font.go: finds a font by family name
@@ -50,6 +52,13 @@ The dependency direction is `main → export → render → format/geom`. Nothin
 
 ## Invariants worth preserving
 
+- **Being lenient and being strict are different jobs, in different packages.**
+  `format.Load` ignores keys it does not know, so a file from a newer desktop
+  app still exports — and that same leniency is what makes `colour:` silently do
+  nothing. `internal/lint` is where the file is judged: it re-reads the raw YAML
+  for line numbers and for the keys nobody read, and `validate` reports
+  everything at once rather than the first thing that went wrong. Never make the
+  loader strict to catch a typo; add the check to the linter.
 - **The tool describes itself, and the description has to be true.** The most
   likely caller is a program holding only this binary and no repository: `help`,
   `<command> --help`, and `schema` (prose, `--example`, `--json`) are how it
@@ -154,6 +163,13 @@ rasterising are not identical across them, and cross-compiles all six release
 targets on every push so a broken target is found before a tag is cut.
 
 ## Releasing
+
+The release workflow runs the suite on all three platforms before it builds
+anything. That is not belt-and-braces: v0.1.2 went out with its main feature
+missing and its own tests failing, because releasing never ran them and the CI
+failure went unread.
+
+
 
 **A patch release may not change what a correct project renders as.** The
 desktop app upgrades itself inside a series without asking — v0.1.0 to v0.1.1,

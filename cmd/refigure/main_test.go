@@ -122,13 +122,19 @@ func project(t *testing.T) string {
 		t.Fatal(err)
 	}
 
-	img := image.NewRGBA(image.Rect(0, 0, 400, 300))
-	for y := 0; y < 300; y++ {
-		for x := 0; x < 400; x++ {
+	writeScreenshot(t, filepath.Join(dir, "connect.png"), 400, 300)
+	return dir
+}
+
+func writeScreenshot(t *testing.T, path string, width, height int) {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
 			img.Set(x, y, color.RGBA{R: 240, G: 240, B: 245, A: 255})
 		}
 	}
-	file, err := os.Create(filepath.Join(dir, "connect.png"))
+	file, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +142,6 @@ func project(t *testing.T) string {
 	if err := png.Encode(file, img); err != nil {
 		t.Fatal(err)
 	}
-	return dir
 }
 
 func size(t *testing.T, path string) (int, int) {
@@ -555,6 +560,8 @@ func TestSchemaExampleIsAValidProject(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "refigure.yaml"), []byte(example), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	// The example names a screenshot, and validate checks that it is there.
+	writeScreenshot(t, filepath.Join(dir, "connect.png"), 1200, 600)
 
 	stdout, stderr, code := run(t, "validate", dir, "--json")
 	if code != 0 {
@@ -562,15 +569,23 @@ func TestSchemaExampleIsAValidProject(t *testing.T) {
 	}
 
 	var result struct {
-		OK      bool `json:"ok"`
-		Screens int  `json:"screens"`
-		Cuts    int  `json:"cuts"`
+		OK       bool `json:"ok"`
+		Screens  int  `json:"screens"`
+		Cuts     int  `json:"cuts"`
+		Problems []struct {
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+		} `json:"problems"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("validate --json is not JSON: %v", err)
 	}
 	if !result.OK || result.Screens != 1 || result.Cuts != 2 {
 		t.Errorf("got %+v", result)
+	}
+	// The example is what a caller copies, so it must not even warn.
+	if len(result.Problems) != 0 {
+		t.Errorf("the printed example is not clean: %+v", result.Problems)
 	}
 
 	// The example must also export, not merely parse — it is a worked example.
@@ -638,17 +653,87 @@ func TestValidateJSONReportsAFailureOnStdout(t *testing.T) {
 	}
 
 	var result struct {
-		OK    bool `json:"ok"`
-		Error struct {
-			Message string `json:"message"`
-			Line    int    `json:"line"`
-		} `json:"error"`
+		OK       bool `json:"ok"`
+		Problems []struct {
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+			Line     int    `json:"line"`
+		} `json:"problems"`
 	}
 	// A caller asking for --json must not have to read stderr to learn it failed.
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("failure was not reported as JSON on stdout: %v", err)
 	}
-	if result.OK || result.Error.Line != 2 || result.Error.Message == "" {
-		t.Errorf("got %+v", result)
+	if result.OK || len(result.Problems) != 1 {
+		t.Fatalf("got %+v", result)
+	}
+	if result.Problems[0].Severity != "error" || result.Problems[0].Line != 2 {
+		t.Errorf("got %+v", result.Problems[0])
+	}
+}
+
+// Every mistake at once, with a line for each: a caller fixes the file in one
+// pass instead of one run per problem.
+func TestValidateReportsEveryProblemTogether(t *testing.T) {
+	dir := project(t)
+	broken := strings.Replace(projectFile, "name: demo", "name: demo\nstyle:\n  colour: red", 1)
+	broken = strings.Replace(broken, "cut: cut_narrow", "cut: cut_ghost", 1)
+	if err := os.WriteFile(filepath.Join(dir, "refigure.yaml"), []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, _, code := run(t, "validate", dir, "--json")
+	if code != 2 {
+		t.Fatalf("exit %d, want 2", code)
+	}
+
+	var result struct {
+		Problems []struct {
+			Severity string `json:"severity"`
+			Message  string `json:"message"`
+			Line     int    `json:"line"`
+			Hint     string `json:"hint"`
+		} `json:"problems"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Problems) < 2 {
+		t.Fatalf("expected the typo and the dangling cut together, got %+v", result.Problems)
+	}
+
+	var sawTypo, sawGhost bool
+	for _, problem := range result.Problems {
+		if problem.Line == 0 {
+			t.Errorf("no line on %+v", problem)
+		}
+		if strings.Contains(problem.Message, "colour") {
+			sawTypo = true
+			if !strings.Contains(problem.Hint, "color") {
+				t.Errorf("no suggestion for the typo: %+v", problem)
+			}
+		}
+		if strings.Contains(problem.Message, "cut_ghost") {
+			sawGhost = true
+		}
+	}
+	if !sawTypo || !sawGhost {
+		t.Errorf("typo=%v dangling=%v in %+v", sawTypo, sawGhost, result.Problems)
+	}
+}
+
+// --strict is for a caller that wants warnings to stop the line too.
+func TestStrictTurnsWarningsIntoAFailure(t *testing.T) {
+	dir := project(t)
+	warned := strings.Replace(projectFile, "name: demo", "name: demo\nstyle:\n  colour: red", 1)
+	if err := os.WriteFile(filepath.Join(dir, "refigure.yaml"), []byte(warned), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, code := run(t, "validate", dir); code != 0 {
+		t.Errorf("a warning alone must not fail, got exit %d", code)
+	}
+	if _, _, code := run(t, "validate", dir, "--strict"); code != 1 {
+		t.Errorf("--strict should exit 1 on a warning, got %d", code)
 	}
 }

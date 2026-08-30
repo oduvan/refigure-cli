@@ -101,9 +101,26 @@ refigure schema --example   # a complete refigure.yaml that validates
 refigure schema --json      # the same as a JSON Schema
 ```
 
-`refigure validate --json` then answers `{"ok":true,"screens":1,"cuts":2}`, or
-`{"ok":false,"error":{"message":"...","line":12}}` — on stdout either way, so
-there is one thing to parse.
+Then check what you wrote. `validate` reports **every** problem at once, with
+the line each is on:
+
+```
+warning: line 4: unknown key `colour` in `style` — it is ignored
+       did you mean `color`?
+error: line 24: figure "fig_box" belongs to cut "cut_missing", which does not exist
+       an owned figure appears only in its own cut, so this one appears nowhere
+```
+
+`--json` gives the same as
+`{"ok":false,"screens":1,"cuts":2,"problems":[{"severity","message","line","hint"}]}`
+— on stdout whether it passed or not, so there is one thing to parse. `--strict`
+makes warnings fail too.
+
+It catches what a reader of the format cannot: a key nobody read (the loader
+ignores unknown keys on purpose, which is exactly what makes a typo invisible),
+an id used twice, a figure owned by a cut that does not exist and therefore
+appears nowhere, two cuts whose images would overwrite each other, a missing
+screenshot, a cut with no area or one running off the edge.
 
 ## The project file
 
