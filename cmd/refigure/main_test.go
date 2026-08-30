@@ -737,3 +737,31 @@ func TestStrictTurnsWarningsIntoAFailure(t *testing.T) {
 		t.Errorf("--strict should exit 1 on a warning, got %d", code)
 	}
 }
+
+// A binary installed with `go install` carries no -ldflags version, so it reads
+// the one the module system recorded. Anyone asking whether they are out of
+// date, or filing a bug, needs a real answer rather than "dev".
+func TestVersionPrefersTheModuleVersionOverNothing(t *testing.T) {
+	for raw, want := range map[string]string{
+		"v0.1.3":                             "v0.1.3",
+		"v1.0.0-20260101120000-abcdef123456": "v1.0.0-20260101120000-abcdef123456",
+		"(devel)":                            "dev",
+		"":                                   "dev",
+	} {
+		if got := normalizeVersion(raw); got != want {
+			t.Errorf("normalizeVersion(%q) = %q, want %q", raw, got, want)
+		}
+	}
+}
+
+// Whatever the build, `version` prints one line and says something.
+func TestVersionAlwaysAnswers(t *testing.T) {
+	stdout, _, code := run(t, "version")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	reported := strings.TrimSpace(stdout)
+	if reported == "" || reported == "(devel)" || strings.Contains(reported, "\n") {
+		t.Errorf("version printed %q", stdout)
+	}
+}

@@ -39,6 +39,19 @@ With a Go toolchain:
 go install github.com/oduvan/refigure-cli/cmd/refigure@latest
 ```
 
+A binary installed this way reports the module version it came from, so
+`refigure version` still answers usefully.
+
+## Keeping it up to date
+
+Whichever way it was installed, `refigure version` says what you have, and the
+[releases page](https://github.com/oduvan/refigure-cli/releases) says what is
+current. Downloaded binaries do not update themselves.
+
+**In CI, pin a version.** `latest` means the exporter can change under a build
+that has not changed, and the images with it. Pin the version you tested with
+and move it deliberately.
+
 ## Use
 
 ```

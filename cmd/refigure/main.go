@@ -13,6 +13,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strings"
 
@@ -26,8 +27,38 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// Version is set at build time: -ldflags "-X main.Version=v1.2.3"
+// Version is set at build time: -ldflags "-X main.Version=v1.2.3".
+//
+// It must stay a plain string literal: the linker's -X can only replace a
+// variable initialised to a constant, so computing it here would silently
+// leave every release reporting "dev".
 var Version = "dev"
+
+// reportedVersion is what `refigure version` prints.
+//
+// A binary built with `go install` carries no -ldflags, and reporting "dev" is
+// no use to anyone asking whether they are out of date, or filing a bug. Go
+// records the module version such a build came from, so fall back to that.
+func reportedVersion() string {
+	if Version != "dev" {
+		return Version
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return "dev"
+	}
+	return normalizeVersion(info.Main.Version)
+}
+
+// normalizeVersion turns what the module system knows into what a person or a
+// script should see. A build from a working tree reports "(devel)", which means
+// the same as knowing nothing.
+func normalizeVersion(raw string) string {
+	if raw == "" || raw == "(devel)" {
+		return "dev"
+	}
+	return raw
+}
 
 const usage = `refigure — export a Refigure project to images
 
@@ -167,7 +198,7 @@ func main() {
 	case "schema":
 		os.Exit(runSchema(args))
 	case "version", "--version", "-v":
-		fmt.Println(Version)
+		fmt.Println(reportedVersion())
 	case "help", "--help", "-h":
 		fmt.Print(helpFor(args))
 	default:
