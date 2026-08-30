@@ -56,8 +56,17 @@ publish() {
     return
   fi
 
+  # Six new names in two minutes reads as spam to npm, and one of them will be
+  # refused with "Package name triggered spam detection". Pausing between new
+  # packages avoids it; re-running the script picks up whatever was refused.
+  if [ "${published_any:-0}" = "1" ]; then
+    echo "  pausing ${PUBLISH_PAUSE:-30}s so npm does not read this as spam"
+    sleep "${PUBLISH_PAUSE:-30}"
+  fi
+
   echo "  publishing $name"
   npm publish "$package" --access public
+  published_any=1
 }
 
 # Platform packages first: the wrapper depends on them, and a wrapper whose
@@ -69,7 +78,10 @@ publish "$root/npm/dist/refigure-cli"
 
 cat <<'NEXT'
 
-Published. One thing left, once per package, on npmjs.com:
+Published. Now run scripts/npm-enable-oidc.sh to point every package at this
+repository's release workflow, after which no token or code is needed again.
+
+If you would rather click, the same thing on npmjs.com is, once per package:
 
   Packages → <package> → Settings → Trusted Publisher → GitHub Actions
     Organization or user:  oduvan
