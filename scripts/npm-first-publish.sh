@@ -23,6 +23,12 @@ if ! npm whoami >/dev/null 2>&1; then
   echo "Run 'npm login' first — this publishes as you, once." >&2
   exit 1
 fi
+
+if [ ! -t 0 ]; then
+  echo "Run this in your own terminal: npm asks for a two-factor code, and it" >&2
+  echo "cannot ask if nothing is attached to the input." >&2
+  exit 1
+fi
 echo "Publishing $version as $(npm whoami)."
 
 echo "Fetching the released binaries..."
@@ -36,13 +42,30 @@ done
 
 "$root/scripts/npm-packages.sh" "$version" "$work"
 
+# npm requires two-factor authentication to publish, so it asks for a code. A
+# code lasts about thirty seconds and there are seven packages, so it may ask
+# more than once — and if one expires part way through, this script can simply
+# be run again: anything already on the registry is skipped.
+publish() {
+  local package="$1"
+  local name
+  name="$(node -p "require('$package/package.json').name")"
+
+  if npm view "$name@${version#v}" version >/dev/null 2>&1; then
+    echo "  $name@${version#v} is already published — skipping"
+    return
+  fi
+
+  echo "  publishing $name"
+  npm publish "$package" --access public
+}
+
 # Platform packages first: the wrapper depends on them, and a wrapper whose
 # binaries are not on the registry yet installs into a broken state.
 for package in "$root"/npm/dist/refigure-cli-*; do
-  echo "publishing $(basename "$package")"
-  npm publish "$package" --access public
+  publish "$package"
 done
-npm publish "$root/npm/dist/refigure-cli" --access public
+publish "$root/npm/dist/refigure-cli"
 
 cat <<'NEXT'
 
