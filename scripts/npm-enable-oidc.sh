@@ -27,6 +27,16 @@ if ! npm whoami >/dev/null 2>&1; then
   exit 1
 fi
 
+# `npm trust` exists before 11.15.0 but sends a request the registry rejects
+# with a bare "400 Bad Request", which says nothing about the cause.
+required="11.15.0"
+installed="$(npm --version)"
+if [ "$(printf '%s\n%s\n' "$required" "$installed" | sort -V | head -1)" != "$required" ]; then
+  echo "npm $installed is too old for 'npm trust' — it needs $required or newer." >&2
+  echo "Run: npm install -g npm@latest" >&2
+  exit 1
+fi
+
 for package in "${packages[@]}"; do
   if npm trust list "$package" 2>/dev/null | grep -q "$repo"; then
     echo "  $package already trusts $repo — skipping"
