@@ -201,11 +201,12 @@ binaries are not there yet installs into a broken state.
 
 npm cannot publish a package's *first* version over OIDC — a trusted publisher
 is attached to a package that already exists, and there is no pending-publisher
-equivalent ([npm/cli#8544](https://github.com/npm/cli/issues/8544)). So the job
-takes an `NPM_TOKEN` secret when there is one and uses OIDC when there is not,
-which is what lets CI create the packages once and then never hold a credential
-again. Until the packages exist and no token is set, it says so and stops rather
-than failing a release.
+equivalent ([npm/cli#8544](https://github.com/npm/cli/issues/8544)). The packages were therefore created
+once, by hand, with `scripts/npm-first-publish.sh`, and
+`scripts/npm-enable-oidc.sh` then pointed each one at this workflow — after
+which no credential exists anywhere. The job still reads an `NPM_TOKEN` secret
+if one is ever set, but there is none, and there does not need to be. Until the
+packages exist it says so and stops rather than failing a release.
 
 `.github/workflows/release.yml` builds darwin/linux/windows × amd64/arm64,
 packs each with the README and LICENSE, writes `checksums.txt`, and creates the
