@@ -184,8 +184,11 @@ Tag and push:
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-After the release is published, two more jobs run. `homebrew` rewrites
-`Formula/refigure.rb` and commits it to main — the formula lives in this repo
+After the release is published, two more jobs run. `repository` rewrites
+`Formula/refigure.rb` and the versions in README.md, and commits both to main —
+the README shows commands people copy, so they carry a real version rather than
+a placeholder, and a real version is wrong the moment the next release lands.
+CLAUDE.md is deliberately left alone: the old versions in it are history — the formula lives in this repo
 rather than a separate `homebrew-tap` so the release can update it with the
 token it already has, since `brew tap` accepts a URL and does not require the
 repo be named `homebrew-something`. `npm` builds seven packages (one per
