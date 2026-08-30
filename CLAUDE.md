@@ -199,10 +199,13 @@ needs `id-token: write` and why provenance is automatic rather than a flag. The
 platform packages publish first, because a wrapper on the registry whose
 binaries are not there yet installs into a broken state.
 
-A trusted publisher is configured on a package that already exists, and npm has
-no pending-publisher equivalent, so the first publish of each package was a
-one-time job from a laptop (`scripts/npm-first-publish.sh`). Until the packages
-exist the job says so and stops rather than failing a release.
+npm cannot publish a package's *first* version over OIDC — a trusted publisher
+is attached to a package that already exists, and there is no pending-publisher
+equivalent ([npm/cli#8544](https://github.com/npm/cli/issues/8544)). So the job
+takes an `NPM_TOKEN` secret when there is one and uses OIDC when there is not,
+which is what lets CI create the packages once and then never hold a credential
+again. Until the packages exist and no token is set, it says so and stops rather
+than failing a release.
 
 `.github/workflows/release.yml` builds darwin/linux/windows × amd64/arm64,
 packs each with the README and LICENSE, writes `checksums.txt`, and creates the

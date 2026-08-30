@@ -280,10 +280,23 @@ jobs:
         run: scripts/npm-packages.sh "$VERSION" artifacts
 
       - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if ! npm view refigure-cli version >/dev/null 2>&1; then
-            echo "::notice::refigure-cli is not on the registry yet, so there is nothing to publish to."
-            echo "::notice::Run scripts/npm-first-publish.sh once from a machine that has run npm login, then configure trusted publishers on npmjs.com."
+          if [ -n "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Publishing with the NPM_TOKEN secret."
+          elif npm view refigure-cli version >/dev/null 2>&1; then
+            # No token, and the packages exist: trusted publishing. setup-node
+            # wrote an .npmrc pointing at an empty token, which would be tried
+            # before OIDC, so it goes.
+            echo "Publishing with trusted publishing — no token involved."
+            rm -f "$HOME/.npmrc"
+          else
+            # npm cannot publish a package's first version over OIDC: a trusted
+            # publisher is attached to a package that already exists, and there
+            # is no pending-publisher equivalent. https://github.com/npm/cli/issues/8544
+            echo "::notice::These packages are not on the registry yet, and npm cannot create them over OIDC."
+            echo "::notice::Add an NPM_TOKEN secret (a granular token with 2FA bypass) and re-run, or publish once from a laptop with scripts/npm-first-publish.sh."
             exit 0
           fi
 
