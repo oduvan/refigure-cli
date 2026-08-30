@@ -93,13 +93,35 @@ refigure export --dry-run --json       # for a script to read
 
 ## In CI
 
+There is nothing to install and no action to add — it is one binary, so the
+same four lines work on GitHub Actions, GitLab CI, Jenkins or a cron job:
+
 ```yaml
 - name: Regenerate tutorial images
+  env:
+    REFIGURE_VERSION: v0.1.4
   run: |
-    curl -sSL https://github.com/oduvan/refigure-cli/releases/latest/download/refigure_${VERSION}_linux_amd64.tar.gz | tar -xz
-    ./refigure export ./docs/screenshots --out ./site/static/img --scale 1400
+    set -euo pipefail
+    asset="refigure_${REFIGURE_VERSION}_linux_amd64.tar.gz"
+    base="https://github.com/oduvan/refigure-cli/releases/download/${REFIGURE_VERSION}"
+    curl -sSLO "$base/$asset"
+    curl -sSLO "$base/checksums.txt"
+    grep " $asset\$" checksums.txt | sha256sum -c -
+    tar -xzf "$asset" refigure
+
     ./refigure validate ./docs/screenshots
+    ./refigure export   ./docs/screenshots --out ./site/static/img --scale 1400
 ```
+
+Three things in there are deliberate:
+
+- **The version is pinned.** `latest` means the exporter can change under a
+  build where nothing else changed, and your images with it. Move the pin when
+  you have looked at the diff.
+- **The download is checked** against the checksums published with the release,
+  which is the same thing the desktop app does before it runs a binary.
+- **`validate` runs first**, so a broken project file fails the job in a second
+  rather than after the images are written.
 
 Fonts are the one thing to get right on a build machine — see below.
 
