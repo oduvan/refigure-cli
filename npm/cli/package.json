@@ -1,0 +1,13 @@
+{
+  "name": "refigure-cli",
+  "version": "0.0.0",
+  "description": "Export a Refigure project to images — one static binary, made for CI",
+  "homepage": "https://github.com/oduvan/refigure-cli",
+  "repository": { "type": "git", "url": "git+https://github.com/oduvan/refigure-cli.git" },
+  "license": "MIT",
+  "bin": { "refigure": "bin/refigure.js" },
+  "files": ["bin/refigure.js", "README.md"],
+  "keywords": ["screenshots", "documentation", "cli", "images", "annotations"],
+  "engines": { "node": ">=16" },
+  "optionalDependencies": {}
+}

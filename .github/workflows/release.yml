@@ -210,3 +210,73 @@ jobs:
             --generate-notes \
             --verify-tag \
             artifacts/refigure_* artifacts/checksums.txt
+
+  # The formula lives in this repo rather than a separate homebrew-tap, so the
+  # release can update it with the token it already has. `brew tap` takes a URL,
+  # so a tap does not have to be named homebrew-something.
+  homebrew:
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          token: ${{ github.token }}
+
+      - name: Write the formula
+        run: |
+          curl -sSLo /tmp/checksums.txt \
+            "https://github.com/${{ github.repository }}/releases/download/$VERSION/checksums.txt"
+          scripts/brew-formula.sh "$VERSION" /tmp/checksums.txt
+
+      - name: Commit it
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet Formula/refigure.rb; then
+            echo "the formula was already current"
+            exit 0
+          fi
+          git add Formula/refigure.rb
+          git commit -m "Point the Homebrew formula at $VERSION"
+          git push origin main
+
+  # Publishing needs an NPM_TOKEN secret. Without one this reports and stops:
+  # a missing token is a setup step nobody has done yet, not a broken release.
+  npm:
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # npm --provenance signs the publish with a workflow identity.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Build the packages
+        run: scripts/npm-packages.sh "$VERSION" artifacts
+
+      - name: Publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::notice::NPM_TOKEN is not set, so nothing was published to npm."
+            exit 0
+          fi
+          # The platform packages first: the wrapper depends on them, and a
+          # wrapper on the registry whose binaries are not there yet installs
+          # into a broken state.
+          for package in npm/dist/refigure-cli-*; do
+            npm publish "$package" --access public --provenance
+          done
+          npm publish npm/dist/refigure-cli --access public --provenance

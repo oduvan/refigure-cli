@@ -1,3 +1,5 @@
 /refigure
 /refigure.exe
 /dist/
+/npm/dist/
+*.tgz

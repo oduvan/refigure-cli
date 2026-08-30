@@ -19,7 +19,26 @@ Single static binary, no runtime, no dependencies to install.
 
 ## Install
 
-Download a binary for your platform from
+**Homebrew** (macOS and Linux):
+
+```bash
+brew tap oduvan/refigure https://github.com/oduvan/refigure-cli
+brew install refigure
+```
+
+`brew upgrade refigure` from then on.
+
+**npm** — for a docs project that already has Node:
+
+```bash
+npx refigure-cli export ./docs/screenshots --out ./site/static/img
+```
+
+Installing `refigure-cli` downloads one binary for your platform. There is no
+postinstall script and nothing is fetched afterwards, so it works behind a proxy
+and with `--ignore-scripts`.
+
+**Or download one file.** Take a binary for your platform from
 [Releases](https://github.com/oduvan/refigure-cli/releases), unpack it, and put
 `refigure` somewhere on your `PATH`.
 

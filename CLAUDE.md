@@ -184,6 +184,16 @@ Tag and push:
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
+After the release is published, two more jobs run. `homebrew` rewrites
+`Formula/refigure.rb` and commits it to main — the formula lives in this repo
+rather than a separate `homebrew-tap` so the release can update it with the
+token it already has, since `brew tap` accepts a URL and does not require the
+repo be named `homebrew-something`. `npm` builds seven packages (one per
+platform, plus the `refigure-cli` wrapper that picks between them) and publishes
+them, or reports and stops when `NPM_TOKEN` is not set. The platform packages
+publish first: a wrapper on the registry whose binaries are not there yet
+installs into a broken state.
+
 `.github/workflows/release.yml` builds darwin/linux/windows × amd64/arm64,
 packs each with the README and LICENSE, writes `checksums.txt`, and creates the
 GitHub release with generated notes. `main.Version` comes from the tag via
