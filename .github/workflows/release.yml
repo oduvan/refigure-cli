@@ -248,13 +248,14 @@ jobs:
           git commit -m "Point the formula and the README at $VERSION"
           git push origin main
 
-  # Published with npm trusted publishing: no token, no secret. npm trades this
-  # workflow's OIDC identity for a short-lived credential, which is why
-  # id-token: write is required and why nothing here reads a secret.
+  # Publishes with an NPM_TOKEN secret when one is set, and with npm trusted
+  # publishing when one is not — hence id-token: write, and hence provenance
+  # being automatic rather than a flag.
   #
-  # Trusted publishing needs the package to already exist — npm has no pending
-  # publisher — so the first publish of each package is a one-time job from a
-  # laptop. See scripts/npm-first-publish.sh.
+  # Both exist because npm cannot create a package over OIDC: a trusted
+  # publisher is attached to a package that already exists. So a token creates
+  # the packages, after which it can be deleted and OIDC takes over with no
+  # credential stored anywhere.
   npm:
     needs: release
     runs-on: ubuntu-latest
