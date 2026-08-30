@@ -43,7 +43,9 @@ for package in "${packages[@]}"; do
     continue
   fi
   echo "  trusting $repo/$workflow for $package"
-  npm trust github "$package" --file "$workflow" --repo "$repo" -y
+  # --allow-publish is required: without a permission flag npm refuses, and
+  # `npm publish` is the only thing the release workflow does.
+  npm trust github "$package" --file "$workflow" --repo "$repo" --allow-publish -y
 done
 
 cat <<'NEXT'
