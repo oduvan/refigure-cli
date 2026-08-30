@@ -23,10 +23,15 @@ Single static binary, no runtime, no dependencies to install.
 
 ```bash
 brew tap oduvan/refigure https://github.com/oduvan/refigure-cli
+brew trust oduvan/refigure
 brew install refigure
 ```
 
 `brew upgrade refigure` from then on.
+
+The `trust` line is Homebrew's, not this project's: it refuses to load a formula
+from a tap outside its own repositories until you say the tap is one you meant
+to add.
 
 **npm** — for a docs project that already has Node:
 
