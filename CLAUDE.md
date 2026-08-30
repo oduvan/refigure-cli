@@ -193,9 +193,16 @@ rather than a separate `homebrew-tap` so the release can update it with the
 token it already has, since `brew tap` accepts a URL and does not require the
 repo be named `homebrew-something`. `npm` builds seven packages (one per
 platform, plus the `refigure-cli` wrapper that picks between them) and publishes
-them, or reports and stops when `NPM_TOKEN` is not set. The platform packages
-publish first: a wrapper on the registry whose binaries are not there yet
-installs into a broken state.
+them with **npm trusted publishing** — no token, no secret: npm trades the
+workflow's OIDC identity for a short-lived credential, which is why the job
+needs `id-token: write` and why provenance is automatic rather than a flag. The
+platform packages publish first, because a wrapper on the registry whose
+binaries are not there yet installs into a broken state.
+
+A trusted publisher is configured on a package that already exists, and npm has
+no pending-publisher equivalent, so the first publish of each package was a
+one-time job from a laptop (`scripts/npm-first-publish.sh`). Until the packages
+exist the job says so and stops rather than failing a release.
 
 `.github/workflows/release.yml` builds darwin/linux/windows × amd64/arm64,
 packs each with the README and LICENSE, writes `checksums.txt`, and creates the

@@ -36,7 +36,8 @@ npx refigure-cli export ./docs/screenshots --out ./site/static/img
 
 Installing `refigure-cli` downloads one binary for your platform. There is no
 postinstall script and nothing is fetched afterwards, so it works behind a proxy
-and with `--ignore-scripts`.
+and with `--ignore-scripts`. Releases are published from CI with npm trusted
+publishing, so every version carries provenance and no token exists to leak.
 
 **Or download one file.** Take a binary for your platform from
 [Releases](https://github.com/oduvan/refigure-cli/releases), unpack it, and put

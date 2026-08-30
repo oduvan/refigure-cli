@@ -248,21 +248,28 @@ jobs:
           git commit -m "Point the formula and the README at $VERSION"
           git push origin main
 
-  # Publishing needs an NPM_TOKEN secret. Without one this reports and stops:
-  # a missing token is a setup step nobody has done yet, not a broken release.
+  # Published with npm trusted publishing: no token, no secret. npm trades this
+  # workflow's OIDC identity for a short-lived credential, which is why
+  # id-token: write is required and why nothing here reads a secret.
+  #
+  # Trusted publishing needs the package to already exist — npm has no pending
+  # publisher — so the first publish of each package is a one-time job from a
+  # laptop. See scripts/npm-first-publish.sh.
   npm:
     needs: release
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      # npm --provenance signs the publish with a workflow identity.
       id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # Trusted publishing wants Node 22.14+ and npm 11.5.1+. Node 22 still
+          # ships npm 10, so npm is upgraded rather than assumed.
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+      - run: npm install -g npm@^11
 
       - uses: actions/download-artifact@v4
         with:
@@ -273,17 +280,18 @@ jobs:
         run: scripts/npm-packages.sh "$VERSION" artifacts
 
       - name: Publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-            echo "::notice::NPM_TOKEN is not set, so nothing was published to npm."
+          if ! npm view refigure-cli version >/dev/null 2>&1; then
+            echo "::notice::refigure-cli is not on the registry yet, so there is nothing to publish to."
+            echo "::notice::Run scripts/npm-first-publish.sh once from a machine that has run npm login, then configure trusted publishers on npmjs.com."
             exit 0
           fi
+
           # The platform packages first: the wrapper depends on them, and a
           # wrapper on the registry whose binaries are not there yet installs
-          # into a broken state.
+          # into a broken state. Provenance is automatic under trusted
+          # publishing, so --provenance is not passed.
           for package in npm/dist/refigure-cli-*; do
-            npm publish "$package" --access public --provenance
+            npm publish "$package" --access public
           done
-          npm publish npm/dist/refigure-cli --access public --provenance
+          npm publish npm/dist/refigure-cli --access public
