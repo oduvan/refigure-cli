@@ -19,7 +19,7 @@ packages=(
   refigure-cli-linux-arm64
   refigure-cli-linux-x64
   refigure-cli-win32-arm64
-  refigure-cli-win32-x64
+  refigure-cli-windows-x64
 )
 
 if ! npm whoami >/dev/null 2>&1; then

@@ -13,13 +13,19 @@
 
 const { spawnSync } = require('node:child_process')
 
+// `${process.platform}-${process.arch}` on the left, the package that holds
+// that binary on the right. They match except for one: npm's spam filter
+// refuses the name `refigure-cli-win32-x64` — consistently, on different days
+// and different networks, while every other name in this set was accepted. The
+// package is called `-windows-x64` instead. Nobody types these names; only this
+// map reads them.
 const PLATFORMS = {
   'darwin-arm64': 'refigure-cli-darwin-arm64',
   'darwin-x64': 'refigure-cli-darwin-x64',
   'linux-arm64': 'refigure-cli-linux-arm64',
   'linux-x64': 'refigure-cli-linux-x64',
   'win32-arm64': 'refigure-cli-win32-arm64',
-  'win32-x64': 'refigure-cli-win32-x64'
+  'win32-x64': 'refigure-cli-windows-x64'
 }
 
 function fail(message) {

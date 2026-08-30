@@ -25,21 +25,24 @@ out="$root/npm/dist"
 rm -rf "$out"
 mkdir -p "$out"
 
-# node's process.platform/arch on the left, Go's names on the right.
+# node's platform-arch, then Go's GOOS and GOARCH, then the package name.
+#
+# The name usually follows the first column. It does not for win32-x64: npm's
+# spam filter refuses `refigure-cli-win32-x64`, consistently, while accepting
+# every other name here. See the map in npm/cli/bin/refigure.js.
 targets=(
-  "darwin-arm64 darwin arm64"
-  "darwin-x64   darwin amd64"
-  "linux-arm64  linux  arm64"
-  "linux-x64    linux  amd64"
-  "win32-arm64  windows arm64"
-  "win32-x64    windows amd64"
+  "darwin-arm64 darwin  arm64 refigure-cli-darwin-arm64"
+  "darwin-x64   darwin  amd64 refigure-cli-darwin-x64"
+  "linux-arm64  linux   arm64 refigure-cli-linux-arm64"
+  "linux-x64    linux   amd64 refigure-cli-linux-x64"
+  "win32-arm64  windows arm64 refigure-cli-win32-arm64"
+  "win32-x64    windows amd64 refigure-cli-windows-x64"
 )
 
 optional=""
 
 for target in "${targets[@]}"; do
-  read -r key goos goarch <<<"$target"
-  name="refigure-cli-$key"
+  read -r key goos goarch name <<<"$target"
   node_os="${key%%-*}"
   node_cpu="${key##*-}"
 
@@ -90,8 +93,16 @@ with open(source) as handle:
 
 package["version"] = version
 package["optionalDependencies"] = {
-    f"refigure-cli-{key}": version
-    for key in ("darwin-arm64", "darwin-x64", "linux-arm64", "linux-x64", "win32-arm64", "win32-x64")
+    name: version
+    for name in (
+        "refigure-cli-darwin-arm64",
+        "refigure-cli-darwin-x64",
+        "refigure-cli-linux-arm64",
+        "refigure-cli-linux-x64",
+        "refigure-cli-win32-arm64",
+        # Not -win32-x64: npm's spam filter refuses that name.
+        "refigure-cli-windows-x64",
+    )
 }
 package["files"] = ["bin/refigure.js", "README.md", "LICENSE"]
 
