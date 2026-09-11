@@ -73,8 +73,17 @@ func lookup(family string, extraDirs []string) (*truetype.Font, bool) {
 		return cached, cached != loadFallback()
 	}
 
-	// The desktop draws text at weight 600, so a semibold cut is preferred.
-	suffixes := []string{"-SemiBold", "-Semibold", "-semibold", "-Medium", "-Bold", "-Regular", ""}
+	// The desktop draws text at weight 600, so a semibold cut is preferred, then
+	// a heavier one, and the regular face only as a last resort. Families are
+	// named both ways on disk — "Inter-SemiBold.ttf" from a font release,
+	// "Georgia Bold.ttf" from macOS — and missing the spaced form means a system
+	// family silently draws regular where the editor drew bold.
+	suffixes := []string{
+		"-SemiBold", "-Semibold", "-semibold", " SemiBold", " Semibold",
+		"-Medium", " Medium",
+		"-Bold", " Bold",
+		"-Regular", " Regular", "",
+	}
 	dirs := append(append([]string{}, extraDirs...), FontDirs()...)
 
 	for _, dir := range dirs {

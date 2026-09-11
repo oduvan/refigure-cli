@@ -203,3 +203,76 @@ func TestArrowHeadIsStrokedAsWellAsFilled(t *testing.T) {
 		t.Errorf("head measures %d px across its base, expected about %d", got, want)
 	}
 }
+
+// gg's own DrawRoundedRectangle cannot be used: it draws each corner as many
+// tiny curve segments and then, when stroking, drops every point within an
+// eighth of a pixel of the one before it. At radius 2 that loses whole corners,
+// and the edges join the wrong points — the rectangle comes out visibly
+// skewed. This asks the drawn rectangle to be square.
+func TestRectangleEdgesAreStraight(t *testing.T) {
+	figure := &format.Figure{
+		ID: "f", Type: format.FigureRect,
+		Rect: &format.Rect{X: 30, Y: 25, W: 140, H: 90},
+	}
+	img, err := Cut(blank(200, 140), format.Rect{X: 0, Y: 0, W: 200, H: 140},
+		[]*format.Figure{figure}, styleOf(red()), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The lowest painted row in a column, away from the rounded corners.
+	bottom := func(x int) int {
+		lowest := -1
+		for y := 0; y < 140; y++ {
+			if isRed(img.At(x, y)) {
+				lowest = y
+			}
+		}
+		return lowest
+	}
+
+	want := bottom(40)
+	for _, x := range []int{60, 90, 120, 150, 160} {
+		if got := bottom(x); got != want {
+			t.Errorf("bottom edge is at y=%d at x=%d but y=%d at x=40 — the rectangle is not square", got, x, want)
+		}
+	}
+}
+
+// A rectangle takes the canvas defaults in FigureShape.tsx, which means a butt
+// cap. With a round cap every dash of a dashed rectangle grows by half a stroke
+// at each end and the outline reads as a different pattern from the editor's.
+func TestDashedRectangleDashesAreNotRounded(t *testing.T) {
+	style := red()
+	style.StrokeWidth = 6
+	style.StrokeStyle = format.StrokeDashed
+
+	figure := &format.Figure{
+		ID: "f", Type: format.FigureRect,
+		Rect: &format.Rect{X: 20, Y: 20, W: 160, H: 100},
+	}
+	img, err := Cut(blank(200, 140), format.Rect{X: 0, Y: 0, W: 200, H: 140},
+		[]*format.Figure{figure}, styleOf(style), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Along the top edge: 18 on, 12 off. Round caps would paint 24 on, 6 off.
+	runs := []int{}
+	run := 0
+	for x := 0; x < 200; x++ {
+		if isRed(img.At(x, 20)) {
+			run++
+		} else if run > 0 {
+			runs = append(runs, run)
+			run = 0
+		}
+	}
+	if len(runs) < 2 {
+		t.Fatalf("expected several dashes along the top edge, got %v", runs)
+	}
+	// The first dash starts at the corner, so measure the second.
+	if runs[1] < 16 || runs[1] > 20 {
+		t.Errorf("a dash measures %d px, expected about 18 — round caps would give 24", runs[1])
+	}
+}

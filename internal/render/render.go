@@ -77,8 +77,19 @@ func drawFigure(ctx *gg.Context, f *format.Figure, style format.ResolvedStyle, o
 
 	ctx.SetColor(stroke)
 	ctx.SetLineWidth(style.StrokeWidth)
-	ctx.SetLineCapRound()
-	ctx.SetLineJoinRound()
+	// FigureShape.tsx asks for round caps and joins on arrows and lines, and
+	// asks for nothing on a rectangle — so a rectangle gets the canvas defaults,
+	// a butt cap and a mitre join. The difference is invisible on a solid
+	// rectangle and obvious on a dashed one, where every dash end is a cap.
+	// gg has no mitre joiner; the corners here are arcs, so the segments meet
+	// almost straight on and bevel is the same to well under a pixel.
+	if f.Type == format.FigureRect {
+		ctx.SetLineCapButt()
+		ctx.SetLineJoinBevel()
+	} else {
+		ctx.SetLineCapRound()
+		ctx.SetLineJoinRound()
+	}
 	if style.StrokeStyle == format.StrokeDashed {
 		// FigureShape.tsx: [width * 3, width * 2]
 		ctx.SetDash(style.StrokeWidth*3, style.StrokeWidth*2)
@@ -121,15 +132,65 @@ func drawFigure(ctx *gg.Context, f *format.Figure, style format.ResolvedStyle, o
 		ctx.Pop()
 
 	case format.FigureRect:
-		r := geom.Normalize(*f.Rect)
 		// cornerRadius 2, and no fill — the screenshot must show through.
-		ctx.DrawRoundedRectangle(r.X, r.Y, r.W, r.H, 2)
+		roundedRect(ctx, geom.Normalize(*f.Rect), 2)
 		ctx.Stroke()
 
 	case format.FigureText:
 		return drawText(ctx, f, style, stroke, opts)
 	}
 	return nil
+}
+
+// roundedRect traces the outline of a rectangle with rounded corners.
+//
+// gg has DrawRoundedRectangle and it cannot be used: when it strokes, gg drops
+// any point within 1/8 px of the one before it (rasterPath, a workaround for
+// its own join artefacts), and gg draws each corner as sixteen curve segments.
+// At radius 2 those segments are far below the threshold, so whole corners
+// disappear from the stroked path and the edges join the wrong points — a
+// rectangle comes out visibly skewed, and a small one comes out a blob.
+//
+// So the corners are traced by hand at about half a pixel per step, coarse
+// enough to survive that filter and finer than a pixel of output. The radius
+// is clamped to half the shorter side, which is what Konva's
+// Util.drawRoundedRectPath does; gg does not clamp at all.
+//
+// The outline starts part-way along the top edge rather than at a corner: gg
+// strokes a closed path as an open polyline and caps both ends, and a cap seam
+// on a corner shows, while one inside a straight edge does not.
+func roundedRect(ctx *gg.Context, r format.Rect, radius float64) {
+	radius = math.Min(radius, math.Min(r.W/2, r.H/2))
+	if radius <= 0 {
+		ctx.MoveTo(r.X, r.Y)
+		ctx.LineTo(r.X+r.W, r.Y)
+		ctx.LineTo(r.X+r.W, r.Y+r.H)
+		ctx.LineTo(r.X, r.Y+r.H)
+		ctx.LineTo(r.X, r.Y)
+		return
+	}
+
+	steps := int(math.Max(3, math.Ceil(radius*math.Pi/2/0.5)))
+	corner := func(cx, cy, from float64) {
+		for i := 1; i <= steps; i++ {
+			a := from + (math.Pi/2)*float64(i)/float64(steps)
+			ctx.LineTo(cx+radius*math.Cos(a), cy+radius*math.Sin(a))
+		}
+	}
+
+	left, top := r.X, r.Y
+	right, bottom := r.X+r.W, r.Y+r.H
+
+	ctx.MoveTo(left+radius, top)
+	ctx.LineTo(right-radius, top)
+	corner(right-radius, top+radius, -math.Pi/2)
+	ctx.LineTo(right, bottom-radius)
+	corner(right-radius, bottom-radius, 0)
+	ctx.LineTo(left+radius, bottom)
+	corner(left+radius, bottom-radius, math.Pi/2)
+	ctx.LineTo(left, top+radius)
+	corner(left+radius, top+radius, math.Pi)
+	ctx.LineTo(left+radius, top)
 }
 
 func drawText(

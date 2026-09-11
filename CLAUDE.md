@@ -78,8 +78,10 @@ The dependency direction is `main → export → render → format/geom`. Nothin
   Dash pattern `[width*3, width*2]`; arrow head `pointerLength` and
   `pointerWidth` both `max(8, width*3)`, filled *and* stroked the way
   `Arrow.__fillStroke` does it, so the outline widens the head by half a stroke
-  on every side; round line caps and joins; rectangle
-  `cornerRadius` 2, never filled; text at weight 600 with `lineHeight` 1.25 and
+  on every side; round caps and joins on arrows and lines, and on a rectangle
+  the canvas defaults — a butt cap, which is what makes a dashed rectangle's
+  dashes the right length; rectangle `cornerRadius` 2, clamped to half the
+  shorter side, never filled; text at weight 600 with `lineHeight` 1.25 and
   the canvas "middle" baseline. `format.DefaultStyle` mirrors the desktop's
   `DEFAULT_STYLE` — `#D93A3E`, stroke 3 solid, Inter 15. Changing any of these
   on one side alone makes the two renderers disagree, which is the one bug this
@@ -93,6 +95,14 @@ The dependency direction is `main → export → render → format/geom`. Nothin
   it can be compared against the desktop's `cutIncludesFigure` by eye.
 - **Downscale never enlarges.** A `--scale` wider than the cut is ignored, not
   applied. `export.Plan` decides the size; `render.Resize` only obeys.
+- **gg's own shape helpers are not safe to use as they come.** When it strokes,
+  gg drops any path point within an eighth of a pixel of the one before it — a
+  workaround for its own join artefacts — and its `DrawRoundedRectangle` draws
+  each corner as sixteen curve segments. Below a radius of about 8 those
+  segments fall under the threshold, whole corners vanish from the stroked path
+  and the edges join the wrong points, so the rectangle comes out skewed.
+  `roundedRect` traces the outline here instead. Anything else drawn with short
+  segments needs the same care.
 - **No cgo, ever.** The point of the binary is that it runs on a build machine
   with nothing installed. When a format needs a C library, the answer is to run
   that library another way, not to give up the static binary — WebP is encoded
@@ -115,6 +125,22 @@ They agree on geometry because the constants are copied. Two places they do not:
   `geom` approximates text width at `0.55 × size` per character — deliberately
   the same crude approximation the desktop uses, so both agree about *membership*
   even when they disagree about pixels.
+
+  Two measured differences, for whoever picks this up next. **Glyph advances
+  agree**: on macOS, Georgia and Arial land within a pixel horizontally. **The
+  baseline does not.** Both sides place a line by its middle and then step down
+  to the alphabetic baseline by `(ascent - descent) / 2`; this tool takes
+  ascent and descent from `hhea`, and Chromium on macOS uses the OS/2 typo
+  metrics, which for Georgia and Arial are about 8% of the em smaller. The text
+  exports 1–2 px lower than the editor draws it, growing with the font size.
+  Changing the metric source here would fix macOS and is not obviously right
+  for Linux or Windows, where the same app resolves metrics differently again —
+  which is the argument for shipping the fonts rather than looking them up.
+- **A font the desktop finds and this tool cannot.** macOS ships Menlo and the
+  rest of its monospace families as `.ttc` collections, which the `truetype`
+  parser cannot read, so they fall back while the editor draws them properly.
+  `x/image/font/sfnt` can parse collections; changing parser changes every
+  glyph, so it wants golden images in place first.
 - **Resampling.** `render.Resize` uses Catmull-Rom; the desktop uses sharp's
   Lanczos3. Close, not identical, on sharp edges.
 
@@ -140,8 +166,9 @@ caching note at the end of this section.
 - `internal/render` — real pixels: the cut crops to its rectangle, a figure at
   screen (60,50) lands at (10,10) inside a cut starting at (50,40), an arrow
   head is wider than its shaft and measures the stroked width Konva gives it,
-  a dashed line leaves gaps, a missing font is reported, a bad colour is an
-  error.
+  a rectangle's edges are straight and its dashes are not lengthened by round
+  caps, a dashed line leaves gaps, a missing font is reported, a bad colour is
+  an error.
 - `cmd/refigure` — the command surface, driven as a subprocess. The
   self-describing part: every command explains itself and exits 0, `help export`
   and `export --help` agree, the help names no flag the binary lacks, the
