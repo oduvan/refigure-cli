@@ -446,15 +446,17 @@ func TestScaleDownscalesButNeverEnlarges(t *testing.T) {
 	}
 }
 
-// A missing font changes what the image looks like, so it is said out loud —
-// but it is a warning, not a failure, and the image is still written.
-func TestAMissingFontWarnsAndStillExports(t *testing.T) {
+// A family this binary does not carry is drawn in the fallback. The editor
+// falls back to the same one, so the image still matches it — but the project
+// did not get the typeface it asked for, so it is said out loud. A warning, not
+// a failure, and the image is still written.
+func TestAnUnknownFontWarnsAndStillExports(t *testing.T) {
 	dir := project(t)
 	_, stderr, code := run(t, "export", dir)
 	if code != 0 {
 		t.Fatalf("exit %d", code)
 	}
-	if !strings.Contains(stderr, "NoSuchFamilyAnywhere") || !strings.Contains(stderr, "fallback") {
+	if !strings.Contains(stderr, "NoSuchFamilyAnywhere") || !strings.Contains(stderr, "Inter") {
 		t.Errorf("stderr was %q", stderr)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "out", "wide.png")); err != nil {

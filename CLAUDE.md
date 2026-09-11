@@ -116,35 +116,34 @@ The dependency direction is `main → export → render → format/geom`. Nothin
 ## Where the two renderers can drift
 
 The desktop draws with Konva in a browser; this tool draws with `gg` on a CPU.
-They agree on geometry because the constants are copied. Two places they do not:
+They agree on geometry because the constants are copied, and on typefaces
+because the font files are copied. Where they still part company:
 
-- **Text is the weak point.** The browser has a font stack, a shaper and its own
-  hinting; here a `.ttf` is found by family name and rendered by freetype. A
-  missing family is reported through `Options.OnMissingFont` and the CLI warns,
-  because silently drawing the wrong font is worse than an ugly warning.
-  `geom` approximates text width at `0.55 × size` per character — deliberately
-  the same crude approximation the desktop uses, so both agree about *membership*
-  even when they disagree about pixels.
+- **Text was the weak point, and is not any more.** Both sides carry the same
+  three font files — `internal/render/fonts` here, `assets/fonts` there — and
+  neither looks at the machine, so the same project draws the same glyphs
+  wherever it is exported, including a CI box with no fonts installed. A family
+  this binary does not carry is drawn in `FallbackFamily`, which the desktop
+  falls back to as well, so the image still matches the preview; the CLI warns
+  because the project did not get the typeface it named. `geom` still
+  approximates text width at `0.55 × size` per character — deliberately the
+  same crude approximation the desktop uses, so both agree about *membership*
+  even where they disagree about pixels.
 
-  Two measured differences, for whoever picks this up next. **Glyph advances
-  agree**: on macOS, Georgia and Arial land within a pixel horizontally. **The
-  baseline does not.** Both sides place a line by its middle and then step down
-  to the alphabetic baseline by `(ascent - descent) / 2`; this tool takes
-  ascent and descent from `hhea`, and Chromium on macOS uses the OS/2 typo
-  metrics, which for Georgia and Arial are about 8% of the em smaller. The text
-  exports 1–2 px lower than the editor draws it, growing with the font size.
-  Changing the metric source here would fix macOS and is not obviously right
-  for Linux or Windows, where the same app resolves metrics differently again —
-  which is the argument for shipping the fonts rather than looking them up.
-- **A font the desktop finds and this tool cannot.** macOS ships Menlo and the
-  rest of its monospace families as `.ttc` collections, which the `truetype`
-  parser cannot read, so they fall back while the editor draws them properly.
-  `x/image/font/sfnt` can parse collections; changing parser changes every
-  glyph, so it wants golden images in place first.
+  Two things had to be measured rather than assumed, and both are now settled.
+  The baseline: Konva used to place text on the canvas "middle" baseline, and
+  Chromium's middle is not `(ascent - descent) / 2` — it is a number that
+  cannot be derived from the font file, so this renderer had no way to reach
+  it. The desktop now sets `Konva._fixTextRendering`, which positions text from
+  the font's own ascent and descent, which is exactly what `drawText` computes.
+  And hinting: `HintingNone`, because Chromium on macOS draws through CoreText,
+  which does not hint. With both, Source Serif and JetBrains Mono land on
+  identical pixel rows and Inter is within anti-aliasing.
 - **Resampling.** `render.Resize` uses Catmull-Rom; the desktop uses sharp's
   Lanczos3. Close, not identical, on sharp edges.
 
-Neither is worth chasing with cleverness. The way to hold them together is
+What is left is anti-aliasing: two rasterisers, two sets of edge pixels. Not
+worth chasing with cleverness. The way to hold them together is
 golden-image fixtures shared between the repos — that is
 [refigure#9](https://github.com/oduvan/refigure/issues/9), and it should land
 before the desktop app starts calling this binary instead of rendering exports

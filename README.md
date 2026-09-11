@@ -104,7 +104,6 @@ The project defaults to the current directory.
 | `--dry-run` | Print what would be written, write nothing. |
 | `--json` | Machine-readable output, for tools. |
 | `--progress` | Report each image on stderr as it is written. |
-| `--font-dir DIR` | Look here for fonts first. Repeatable. |
 
 Exit codes: `0` success, `1` failure, `2` the project file could not be read or
 is invalid. `validate` is the one to put in a pre-commit hook.
@@ -148,7 +147,7 @@ Three things in there are deliberate:
 - **`validate` runs first**, so a broken project file fails the job in a second
   rather than after the images are written.
 
-Fonts are the one thing to get right on a build machine — see below.
+Fonts need nothing on a build machine: they ship inside the binary — see below.
 
 ## Writing a project file
 
@@ -238,19 +237,32 @@ this tool needing a matching release.
 
 ## Fonts
 
-Text figures are drawn with a real font file, found by family name in the
-system font directories (and in any `--font-dir` you pass). If the family is
-missing, the tool says so and falls back to a bundled font — the image is still
-written, but the text will not match what the editor showed.
+Three families ship inside the binary, and they are the only ones it draws:
 
-Build machines usually have no fonts at all. Either install the family you use,
-or commit the `.ttf` next to your project and pass `--font-dir`.
+| Family | Licence |
+|---|---|
+| Inter | SIL Open Font License 1.1 |
+| Source Serif 4 | SIL Open Font License 1.1 |
+| JetBrains Mono | SIL Open Font License 1.1 |
+
+Nothing is read from the machine, so a build box with no fonts installed
+produces exactly the same images as the laptop the project was drawn on. The
+desktop app ships these same files, which is what makes its preview and this
+tool's output the same picture.
+
+A project that names any other family is drawn in **Inter**. The desktop app
+falls back the same way, so the image still matches its preview — but the
+project did not get the typeface it asked for, so the tool says so on stderr.
+
+The licence texts are in `internal/render/fonts`.
 
 ## Limits
 
 - **Downscaling is not pixel-identical to the desktop app.** This tool uses
   Catmull-Rom; the desktop uses sharp's Lanczos3. Sharp edges can differ by a
   hair at the same size.
+- **Anti-aliasing is not identical either.** Two rasterisers draw the same shape
+  in the same place, and disagree about the part-covered pixels along its edge.
 
 ## Build
 

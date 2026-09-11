@@ -113,7 +113,6 @@ Flags:
   --progress       one line per image on stderr as it is written:
                    "progress 3/12 connect-token.png". Goes to stderr so it can
                    be combined with --json.
-  --font-dir DIR   look here for fonts before the system folders. Repeatable.
                    A missing font is a warning, not a failure, and the text is
                    drawn with a fallback that will not match the editor.
 
@@ -238,11 +237,6 @@ func wantsHelp(args []string) bool {
 	return false
 }
 
-type stringList []string
-
-func (s *stringList) String() string     { return strings.Join(*s, ",") }
-func (s *stringList) Set(v string) error { *s = append(*s, v); return nil }
-
 func runExport(args []string) int {
 	if wantsHelp(args) {
 		fmt.Print(exportUsage)
@@ -259,8 +253,6 @@ func runExport(args []string) int {
 	dryRun := flags.Bool("dry-run", false, "print what would be written")
 	asJSON := flags.Bool("json", false, "machine-readable output")
 	progress := flags.Bool("progress", false, "report each image on stderr as it is written")
-	var fontDirs stringList
-	flags.Var(&fontDirs, "font-dir", "extra font directory")
 	dir := parseDir(flags, args)
 
 	project, code := load(dir)
@@ -331,11 +323,11 @@ func runExport(args []string) int {
 
 	missingFonts := map[string]bool{}
 	renderOpts := render.Options{
-		FontDirs: fontDirs,
 		OnMissingFont: func(family string) {
 			if !missingFonts[family] {
 				missingFonts[family] = true
-				warn("font %q was not found, so text is drawn with a fallback and will not match the editor", family)
+				warn("this build does not carry the font %q, so text is drawn in %s — the editor falls back the same way, so the image still matches it",
+					family, render.FallbackFamily)
 			}
 		},
 	}

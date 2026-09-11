@@ -21,10 +21,11 @@ import (
 	xdraw "golang.org/x/image/draw"
 )
 
-// Options tune where fonts come from.
+// Options carry what drawing needs beyond the project itself.
 type Options struct {
-	FontDirs []string
-	// OnMissingFont is called once per family that could not be resolved.
+	// OnMissingFont is called once per family this binary does not carry. The
+	// image still matches the editor, which falls back the same way — it is just
+	// not the typeface the project named.
 	OnMissingFont func(family string)
 }
 
@@ -200,7 +201,7 @@ func drawText(
 	fill color.Color,
 	opts Options,
 ) error {
-	face, found := Face(style.FontFamily, style.FontSize, opts.FontDirs)
+	face, found := Face(style.FontFamily, style.FontSize)
 	if !found && opts.OnMissingFont != nil {
 		opts.OnMissingFont(style.FontFamily)
 	}
