@@ -94,19 +94,30 @@ func drawFigure(ctx *gg.Context, f *format.Figure, style format.ResolvedStyle, o
 	case format.FigureArrow:
 		ctx.DrawLine(f.From.X, f.From.Y, f.To.X, f.To.Y)
 		ctx.Stroke()
-		// Konva draws the head as a filled triangle whose tip is the end point,
-		// extending back by pointerLength, pointerWidth across.
+		// Konva draws the head as a triangle whose tip is the end point,
+		// extending back by pointerLength, pointerWidth across — and then both
+		// fills and strokes it (Arrow.__fillStroke), never dashed. The outline
+		// is what gives the head its size: it widens the triangle by half the
+		// stroke on every side, rounds the corners, and covers the round cap
+		// the shaft leaves sticking out past the tip. Filling alone draws a
+		// sharp sliver with a blob on its point.
 		head := math.Max(8, style.StrokeWidth*3)
 		angle := math.Atan2(f.To.Y-f.From.Y, f.To.X-f.From.X)
 		ctx.SetDash()
 		ctx.Push()
 		ctx.Translate(f.To.X, f.To.Y)
 		ctx.Rotate(angle)
-		ctx.MoveTo(0, 0)
+		// The outline starts and ends halfway along the base, not at a corner:
+		// gg strokes a closed path as an open polyline, capping both ends
+		// instead of joining them, and a cap seam on a corner shows as a spike.
+		// Halfway along an edge the two caps fall inside the band and vanish.
+		ctx.MoveTo(-head, 0)
 		ctx.LineTo(-head, head/2)
+		ctx.LineTo(0, 0)
 		ctx.LineTo(-head, -head/2)
-		ctx.ClosePath()
-		ctx.Fill()
+		ctx.LineTo(-head, 0)
+		ctx.FillPreserve()
+		ctx.Stroke()
 		ctx.Pop()
 
 	case format.FigureRect:

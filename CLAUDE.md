@@ -76,7 +76,9 @@ The dependency direction is `main → export → render → format/geom`. Nothin
   matching release. Never switch the YAML decoder to strict mode.
 - **The drawing constants mirror the desktop's `FigureShape.tsx`, exactly.**
   Dash pattern `[width*3, width*2]`; arrow head `pointerLength` and
-  `pointerWidth` both `max(8, width*3)`; round line caps and joins; rectangle
+  `pointerWidth` both `max(8, width*3)`, filled *and* stroked the way
+  `Arrow.__fillStroke` does it, so the outline widens the head by half a stroke
+  on every side; round line caps and joins; rectangle
   `cornerRadius` 2, never filled; text at weight 600 with `lineHeight` 1.25 and
   the canvas "middle" baseline. `format.DefaultStyle` mirrors the desktop's
   `DEFAULT_STYLE` — `#D93A3E`, stroke 3 solid, Inter 15. Changing any of these
@@ -137,8 +139,9 @@ caching note at the end of this section.
   enlarging, extensions, name collisions, `--only`, zero-sized cuts, the cascade.
 - `internal/render` — real pixels: the cut crops to its rectangle, a figure at
   screen (60,50) lands at (10,10) inside a cut starting at (50,40), an arrow
-  head is wider than its shaft, a dashed line leaves gaps, a missing font is
-  reported, a bad colour is an error.
+  head is wider than its shaft and measures the stroked width Konva gives it,
+  a dashed line leaves gaps, a missing font is reported, a bad colour is an
+  error.
 - `cmd/refigure` — the command surface, driven as a subprocess. The
   self-describing part: every command explains itself and exits 0, `help export`
   and `export --help` agree, the help names no flag the binary lacks, the

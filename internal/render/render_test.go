@@ -82,8 +82,8 @@ func TestArrowDrawsAHead(t *testing.T) {
 		t.Error("the arrow shaft should reach the end point")
 	}
 
-	// The head is a filled triangle back from the tip, so a column just behind
-	// the end is taller than the 3px shaft in the middle.
+	// The head widens back from the tip, so a column just behind the end is
+	// taller than the 3px shaft in the middle.
 	height := func(x int) int {
 		n := 0
 		for y := 0; y < 100; y++ {
@@ -163,5 +163,43 @@ func TestBadColourIsRejected(t *testing.T) {
 	if _, err := Cut(blank(50, 50), format.Rect{X: 0, Y: 0, W: 50, H: 50},
 		[]*format.Figure{figure}, styleOf(style), Options{}); err == nil {
 		t.Error("expected an error")
+	}
+}
+
+// Konva fills *and* strokes the arrow head (Arrow.__fillStroke), so its
+// outline widens the triangle by half a stroke on every side and covers the
+// round cap the shaft leaves past the tip. Filling alone drew a sharp sliver
+// with a blob on its point — an arrow that looked broken next to the editor's.
+func TestArrowHeadIsStrokedAsWellAsFilled(t *testing.T) {
+	style := red()
+	style.StrokeWidth = 9
+
+	figure := &format.Figure{
+		ID: "f", Type: format.FigureArrow,
+		From: &format.Point{X: 20, Y: 100},
+		To:   &format.Point{X: 180, Y: 100},
+	}
+	img, err := Cut(blank(200, 200), format.Rect{X: 0, Y: 0, W: 200, H: 200},
+		[]*format.Figure{figure}, styleOf(style), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	across := func(x int) int {
+		n := 0
+		for y := 0; y < 200; y++ {
+			if isRed(img.At(x, y)) {
+				n++
+			}
+		}
+		return n
+	}
+
+	// pointerWidth is three times the stroke, and the outline adds half a
+	// stroke on each side: 27 + 9. Fill alone measures 27.
+	const want = 27 + 9
+	got := across(180 - 27 + 1)
+	if got < want-2 || got > want+2 {
+		t.Errorf("head measures %d px across its base, expected about %d", got, want)
 	}
 }
