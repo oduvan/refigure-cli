@@ -42,15 +42,24 @@ Cut — a named rectangle that exports as one image
 
 Figure — something drawn on the screenshot
   id        string   required.
-  type      string   required. One of: arrow, line, rect, text.
+  type      string   required. One of: arrow, line, rect, text, blur, pixelate.
   cut       string   optional. A cut id. The figure then belongs to that cut
                      alone and moves with it. Without it the figure appears in
                      every cut whose rectangle it overlaps.
-  style     Style    optional. Overrides everything above it.
+  style     Style    optional. Overrides everything above it. blur and pixelate
+                     draw nothing of their own, so they ignore it.
 
   arrow, line need:  from: {x, y}   to: {x, y}
   rect needs:        rect: {x, y, w, h}
   text needs:        at: {x, y}     text: "the words"
+  blur needs:        rect: {x, y, w, h}   radius: 6    (radius optional)
+  pixelate needs:    rect: {x, y, w, h}   cell: 12     (cell optional)
+
+  blur and pixelate hide the screenshot under their rectangle instead of
+  drawing on it — a token, an address, a colleague's name. They read the
+  screenshot, never the figures already drawn over it, so what they hide does
+  not depend on what else is on the screen. radius is how far each pixel is
+  smeared; cell is how big a block becomes. Both are in screen pixels.
 
 Rect      { x, y, w, h }   numbers, in screen pixels. w and h are not negative.
 Point     { x, y }         numbers, in screen pixels.

@@ -60,6 +60,11 @@ const (
 	FigureLine  FigureType = "line"
 	FigureRect  FigureType = "rect"
 	FigureText  FigureType = "text"
+	// Hiding a region rather than pointing at it. Both cover a rectangle and
+	// read the screenshot underneath; the number they carry means a different
+	// thing in each, which is why they are two types and not one with a mode.
+	FigureBlur     FigureType = "blur"
+	FigurePixelate FigureType = "pixelate"
 )
 
 type Figure struct {
@@ -67,13 +72,17 @@ type Figure struct {
 	Type FigureType `yaml:"type"`
 	// Cut is the owning cut's id. A figure that has one belongs to that cut
 	// alone; one without belongs to every cut it overlaps.
-	Cut   string `yaml:"cut"`
-	Rect  *Rect  `yaml:"rect"`
-	From  *Point `yaml:"from"`
-	To    *Point `yaml:"to"`
-	At    *Point `yaml:"at"`
-	Text  string `yaml:"text"`
-	Style *Style `yaml:"style"`
+	Cut  string `yaml:"cut"`
+	Rect *Rect  `yaml:"rect"`
+	From *Point `yaml:"from"`
+	To   *Point `yaml:"to"`
+	At   *Point `yaml:"at"`
+	Text string `yaml:"text"`
+	// Radius is a blur's box radius, Cell a pixelate's block size, both in
+	// screen pixels. Zero means the figure did not say, and the default applies.
+	Radius int    `yaml:"radius"`
+	Cell   int    `yaml:"cell"`
+	Style  *Style `yaml:"style"`
 }
 
 type CutFigures struct {
@@ -254,7 +263,7 @@ func (f *Figure) validate(screen string) error {
 		if f.To == nil {
 			return missing("to")
 		}
-	case FigureRect:
+	case FigureRect, FigureBlur, FigurePixelate:
 		if f.Rect == nil {
 			return missing("rect")
 		}

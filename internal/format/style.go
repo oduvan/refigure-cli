@@ -25,6 +25,17 @@ var DefaultStyle = ResolvedStyle{
 	FontSize:    15,
 }
 
+// How hard a blur or a pixelate hides when the figure does not say, and how
+// many box blurs make up one blur. All three must match the desktop app's core
+// package — BLUR_PASSES is part of the definition of a blur, not a tuning knob,
+// because a region hidden less thoroughly in the file than on the canvas can
+// leak what it was asked to hide.
+const (
+	DefaultBlurRadius   = 6
+	DefaultPixelateCell = 12
+	BlurPasses          = 3
+)
+
 // Resolve applies the cascade: defaults, then the project style, then the
 // screen's override, then the figure's own.
 func Resolve(levels ...*Style) ResolvedStyle {

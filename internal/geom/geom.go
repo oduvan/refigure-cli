@@ -48,7 +48,7 @@ const textWidthPerChar = 0.55
 // Bounds is a figure's extent in screen coordinates.
 func Bounds(f *format.Figure, style format.ResolvedStyle) format.Rect {
 	switch f.Type {
-	case format.FigureRect:
+	case format.FigureRect, format.FigureBlur, format.FigurePixelate:
 		return Normalize(*f.Rect)
 	case format.FigureArrow, format.FigureLine:
 		return Normalize(format.Rect{

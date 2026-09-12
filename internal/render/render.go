@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"image/draw"
 	"math"
 	"strings"
 
@@ -49,11 +50,75 @@ func Cut(
 	ctx.Translate(-rect.X, -rect.Y)
 
 	for _, figure := range figures {
-		if err := drawFigure(ctx, figure, styleOf(figure), opts); err != nil {
-			return nil, err
+		switch figure.Type {
+		case format.FigureBlur, format.FigurePixelate:
+			// Hiding reads the screenshot, not the canvas, so what a redaction
+			// covers does not depend on which figures happen to sit under it.
+			// It still draws in order, so a later figure lands on top of it.
+			if err := drawRedaction(ctx, screenshot, figure, rect); err != nil {
+				return nil, err
+			}
+		default:
+			if err := drawFigure(ctx, figure, styleOf(figure), opts); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return ctx.Image(), nil
+}
+
+// drawRedaction blurs or pixelates the screenshot under a figure and paints the
+// result over the cut.
+//
+// The region is clipped to the screenshot first — there is nothing to hide off
+// the edge of the picture — and the clipped rectangle is what both the blur
+// window and the pixelate grid are measured from, so the desktop's preview,
+// which clips the same way, lands on the same blocks.
+//
+// The patch is NRGBA because that is what a browser canvas hands its filters:
+// straight alpha, not premultiplied. On the opaque screenshots this is used for
+// the two are the same, and on a transparent one they would not be.
+func drawRedaction(ctx *gg.Context, screenshot image.Image, f *format.Figure, cut format.Rect) error {
+	dst, ok := ctx.Image().(*image.RGBA)
+	if !ok {
+		return fmt.Errorf("figure %s: the drawing surface is not an RGBA image", f.ID)
+	}
+
+	region := geom.Round(geom.Normalize(*f.Rect))
+	bounds := screenshot.Bounds()
+	x0 := max(int(region.X), bounds.Min.X)
+	y0 := max(int(region.Y), bounds.Min.Y)
+	x1 := min(int(region.X+region.W), bounds.Max.X)
+	y1 := min(int(region.Y+region.H), bounds.Max.Y)
+	if x1 <= x0 || y1 <= y0 {
+		return nil
+	}
+
+	width, height := x1-x0, y1-y0
+	patch := image.NewNRGBA(image.Rect(0, 0, width, height))
+	draw.Draw(patch, patch.Bounds(), screenshot, image.Pt(x0, y0), draw.Src)
+
+	if f.Type == format.FigureBlur {
+		radius := f.Radius
+		if radius <= 0 {
+			radius = format.DefaultBlurRadius
+		}
+		blur(patch.Pix, width, height, radius, format.BlurPasses)
+	} else {
+		cell := f.Cell
+		if cell <= 0 {
+			cell = format.DefaultPixelateCell
+		}
+		pixelate(patch.Pix, width, height, cell)
+	}
+
+	// draw.Src rather than the context's own DrawImage: gg puts every image
+	// through a resampler, and these pixels must land exactly as computed.
+	// draw.Draw clips to the destination, which is how a region that runs off
+	// the cut is handled.
+	at := image.Rect(x0-int(cut.X), y0-int(cut.Y), x1-int(cut.X), y1-int(cut.Y))
+	draw.Draw(dst, at, patch, image.Point{}, draw.Src)
+	return nil
 }
 
 // Resize scales an image down. It never enlarges — the caller decides the size,

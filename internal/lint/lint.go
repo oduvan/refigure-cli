@@ -84,6 +84,8 @@ var (
 		"id": nil, "type": nil, "cut": nil, "style": styleShape,
 		"from": pointShape, "to": pointShape, "at": pointShape,
 		"rect": rectShape, "text": nil,
+		// A blur's smear and a pixelate's block, both in screen pixels.
+		"radius": nil, "cell": nil,
 	})
 	cutShape = mapping(map[string]*shape{
 		"id": nil, "name": nil, "rect": rectShape, "style": styleShape,

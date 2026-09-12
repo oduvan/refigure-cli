@@ -276,3 +276,71 @@ func TestDashedRectangleDashesAreNotRounded(t *testing.T) {
 		t.Errorf("a dash measures %d px, expected about 18 — round caps would give 24", runs[1])
 	}
 }
+
+// A blur reads the screenshot under it, not the canvas, and paints the result
+// over the cut. The point of the figure is that what was there stops being
+// readable, so the test asks exactly that: a hard black/white edge inside the
+// region must survive nowhere.
+func TestBlurHidesWhatIsUnderIt(t *testing.T) {
+	src := image.NewRGBA(image.Rect(0, 0, 200, 140))
+	for y := 0; y < 140; y++ {
+		for x := 0; x < 200; x++ {
+			if x < 100 {
+				src.Set(x, y, color.Black)
+			} else {
+				src.Set(x, y, color.White)
+			}
+		}
+	}
+
+	figure := &format.Figure{
+		ID: "f", Type: format.FigureBlur,
+		Rect: &format.Rect{X: 40, Y: 20, W: 120, H: 100},
+	}
+	img, err := Cut(src, format.Rect{X: 0, Y: 0, W: 200, H: 140},
+		[]*format.Figure{figure}, styleOf(red()), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Inside the region the edge is gone: neither side is still pure.
+	grey := func(x, y int) int {
+		r, _, _, _ := img.At(x, y).RGBA()
+		return int(r >> 8)
+	}
+	if grey(95, 70) < 20 {
+		t.Errorf("the dark side of the edge is still black inside the blur: %d", grey(95, 70))
+	}
+	if grey(105, 70) > 235 {
+		t.Errorf("the light side of the edge is still white inside the blur: %d", grey(105, 70))
+	}
+
+	// Outside it nothing moved.
+	if grey(10, 70) != 0 || grey(190, 70) != 255 {
+		t.Errorf("the blur leaked outside its rectangle: %d and %d", grey(10, 70), grey(190, 70))
+	}
+}
+
+// A pixelate region that hangs off the screenshot is clipped, not an error, and
+// the part that is on the picture is still hidden.
+func TestRedactionClipsToTheScreenshot(t *testing.T) {
+	figure := &format.Figure{
+		ID: "f", Type: format.FigurePixelate,
+		Rect: &format.Rect{X: -50, Y: -50, W: 120, H: 120},
+	}
+	if _, err := Cut(blank(200, 140), format.Rect{X: 0, Y: 0, W: 200, H: 140},
+		[]*format.Figure{figure}, styleOf(red()), Options{}); err != nil {
+		t.Fatalf("a region hanging off the screenshot must draw what it can: %v", err)
+	}
+
+	// And one entirely outside draws nothing rather than reaching for pixels
+	// that are not there.
+	away := &format.Figure{
+		ID: "g", Type: format.FigureBlur,
+		Rect: &format.Rect{X: 500, Y: 500, W: 50, H: 50},
+	}
+	if _, err := Cut(blank(200, 140), format.Rect{X: 0, Y: 0, W: 200, H: 140},
+		[]*format.Figure{away}, styleOf(red()), Options{}); err != nil {
+		t.Fatalf("a region off the picture entirely must be a no-op: %v", err)
+	}
+}

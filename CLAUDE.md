@@ -86,6 +86,15 @@ The dependency direction is `main → export → render → format/geom`. Nothin
   `DEFAULT_STYLE` — `#D93A3E`, stroke 3 solid, Inter 15. Changing any of these
   on one side alone makes the two renderers disagree, which is the one bug this
   project cannot tolerate. Change the specification first.
+- **A redaction is held to the byte, not to the eye.** `redact.go` mirrors the
+  desktop's `packages/core/src/render/redact.ts` — pass count, sweep order,
+  edge clamping, truncating integer division — and both sides assert the same
+  digests over the same pseudo-random image. Every other figure may differ by
+  anti-aliasing; a blur may not, because a region hidden less thoroughly here
+  than in the editor can leak what it was asked to hide. `drawRedaction` reads
+  the *screenshot*, never the canvas, so what a redaction covers does not depend
+  on which figures sit under it, and it writes with `draw.Src` rather than gg's
+  `DrawImage`, which would put the result through a resampler.
 - **Figures are in screen coordinates, never cut coordinates.** `render.Cut`
   translates the whole scene by `-rect.X, -rect.Y` and then draws figures at
   their stored coordinates. Do not pre-subtract anywhere else.
