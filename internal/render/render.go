@@ -98,18 +98,20 @@ func drawRedaction(ctx *gg.Context, screenshot image.Image, f *format.Figure, cu
 	patch := image.NewNRGBA(image.Rect(0, 0, width, height))
 	draw.Draw(patch, patch.Bounds(), screenshot, image.Pt(x0, y0), draw.Src)
 
+	// The default is measured from the figure's own rectangle, not from the
+	// clipped patch: a region half off the screenshot must be hidden as hard as
+	// the same region fully on it, and the desktop measures the same rectangle.
+	strength := format.DefaultRedactionStrength(region, f.Type)
 	if f.Type == format.FigureBlur {
-		radius := f.Radius
-		if radius <= 0 {
-			radius = format.DefaultBlurRadius
+		if f.Radius > 0 {
+			strength = f.Radius
 		}
-		blur(patch.Pix, width, height, radius, format.BlurPasses)
+		blur(patch.Pix, width, height, strength, format.BlurPasses)
 	} else {
-		cell := f.Cell
-		if cell <= 0 {
-			cell = format.DefaultPixelateCell
+		if f.Cell > 0 {
+			strength = f.Cell
 		}
-		pixelate(patch.Pix, width, height, cell)
+		pixelate(patch.Pix, width, height, strength)
 	}
 
 	// draw.Src rather than the context's own DrawImage: gg puts every image

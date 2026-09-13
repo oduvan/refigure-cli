@@ -3,6 +3,8 @@ package render
 import (
 	"fmt"
 	"testing"
+
+	"github.com/oduvan/refigure-cli/internal/format"
 )
 
 // The same pseudo-random image the desktop's checker builds, so both sides
@@ -84,6 +86,35 @@ func TestTheSampleGeneratorMatchesTheDesktop(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("sample bytes %v, the desktop produces %v", got, want)
+		}
+	}
+}
+
+// The default strength is a copied rule, like the drawing constants: the
+// desktop works the same number out of the same rectangle, or a region would be
+// hidden by a different amount in the file than on the canvas. These values
+// come from `defaultRedactionStrength` in the desktop's core package.
+func TestDefaultStrengthMatchesTheDesktop(t *testing.T) {
+	cases := []struct {
+		w, h float64
+		kind format.FigureType
+		want int
+	}{
+		{400, 40, format.FigureBlur, 10},
+		{400, 40, format.FigurePixelate, 16},
+		{560, 120, format.FigureBlur, 30},
+		{560, 120, format.FigurePixelate, 48},
+		// A floor, because a sliver is still worth hiding. No ceiling: it would
+		// only weaken a large region, and costs nothing to leave off — both
+		// algorithms touch every pixel once whatever the strength.
+		{500, 8, format.FigureBlur, 6},
+		{500, 8, format.FigurePixelate, 12},
+		{800, 600, format.FigureBlur, 150},
+	}
+	for _, c := range cases {
+		got := format.DefaultRedactionStrength(format.Rect{W: c.w, H: c.h}, c.kind)
+		if got != c.want {
+			t.Errorf("%s over %gx%g: got %d, the desktop gets %d", c.kind, c.w, c.h, got, c.want)
 		}
 	}
 }

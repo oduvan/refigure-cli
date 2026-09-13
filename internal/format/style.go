@@ -26,15 +26,41 @@ var DefaultStyle = ResolvedStyle{
 }
 
 // How hard a blur or a pixelate hides when the figure does not say, and how
-// many box blurs make up one blur. All three must match the desktop app's core
-// package — BLUR_PASSES is part of the definition of a blur, not a tuning knob,
+// many box blurs make up one blur. Both must match the desktop app's core
+// package — BlurPasses is part of the definition of a blur, not a tuning knob,
 // because a region hidden less thoroughly in the file than on the canvas can
 // leak what it was asked to hide.
-const (
-	DefaultBlurRadius   = 6
-	DefaultPixelateCell = 12
-	BlurPasses          = 3
-)
+const BlurPasses = 3
+
+// DefaultRedactionStrength is how hard to hide a region the figure says nothing
+// about. It comes from the region rather than being a fixed number of pixels: a
+// blur of six pixels is a lot on a small icon and nothing at all across a line
+// of thirty-pixel text, and a redaction that merely softens its region has
+// failed at the only thing it is for.
+//
+// A pixelate has to be coarser than a blur to hide the same thing. Measured on
+// a stroke pattern the shape of writing, a blur of radius 10 leaves about 1% of
+// the detail behind and a pixelate of cell 10 leaves 12% — still legible. So
+// the two have their own divisors. There is a floor and no ceiling: both
+// algorithms run on every pixel of the region exactly once whatever the
+// strength, so a bigger number is not slower.
+//
+// Measured from the figure's own rectangle, before it is clipped to the
+// screenshot, which is what the desktop measures too. Must match
+// defaultRedactionStrength in the desktop app's core package.
+func DefaultRedactionStrength(r Rect, kind FigureType) int {
+	shorter := r.W
+	if r.H < shorter {
+		shorter = r.H
+	}
+	if shorter < 0 {
+		shorter = -shorter
+	}
+	if kind == FigureBlur {
+		return max(6, int(shorter/4+0.5))
+	}
+	return max(12, int(shorter/2.5+0.5))
+}
 
 // Resolve applies the cascade: defaults, then the project style, then the
 // screen's override, then the figure's own.
