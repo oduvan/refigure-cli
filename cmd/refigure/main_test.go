@@ -503,8 +503,10 @@ func TestEveryCommandExplainsItself(t *testing.T) {
 		{"list", "--help"},
 		{"validate", "--help"},
 		{"schema", "--help"},
+		{"mcp", "--help"},
 		{"help", "export"},
 		{"help", "schema"},
+		{"help", "mcp"},
 	} {
 		stdout, _, code := run(t, args...)
 		if code != 0 {

@@ -38,17 +38,22 @@ Go 1.23+. `CGO_ENABLED=0` everywhere — see the invariants.
 
 ```
 cmd/refigure/main.go    flags, subcommands, output (text and --json), exit codes
+            work.go     the jobs themselves, with none of the talking in them
+            mcp.go      those same jobs as MCP tools, plus preview
 internal/
 ├── format/   reads refigure.yaml (project.go), the style cascade (style.go),
 │             and the format's own description (schema.go)
 ├── lint/     judges a project file: unknown keys, dangling references, geometry
 ├── geom/     rect maths, figure bounds, membership
 ├── export/   plan.go: what to write and under which name · write.go: encoding
-└── render/   render.go: draws a cut · font.go: finds a font by family name
+├── render/   render.go: draws a cut · font.go: finds a font by family name
+└── mcp/      newline-delimited JSON-RPC — the protocol, and none of the tools
 ```
 
 The dependency direction is `main → export → render → format/geom`. Nothing in
-`internal/` reads flags or prints; `main` does all the talking.
+`internal/` reads flags or prints; `main` does all the talking. `internal/mcp`
+is not an exception: it reads and writes the two streams it is handed, and
+`main` is what hands it os.Stdin and os.Stdout.
 
 ## Invariants worth preserving
 
@@ -95,6 +100,38 @@ The dependency direction is `main → export → render → format/geom`. Nothin
   the *screenshot*, never the canvas, so what a redaction covers does not depend
   on which figures sit under it, and it writes with `draw.Src` rather than gg's
   `DrawImage`, which would put the result through a resampler.
+- **The MCP server is the command line, not a second product.** `refigure mcp`
+  offers `schema`, `validate`, `list` and `export` under the names those
+  commands have, and both callers do the work through the same functions in
+  `cmd/refigure/work.go` — neither holds a copy. Adding a flag to a command
+  means adding the argument to its tool in the same edit, or an agent is
+  offered a smaller tool than the one a person gets and nothing says so. The
+  one tool with no command behind it is `preview`: it renders a cut and hands
+  it back as an image, which is the only thing this server can do that running
+  the binary cannot. Something that has just written twenty lines of YAML has
+  no other way to see what they draw.
+- **While `mcp` runs, stdout carries protocol messages and nothing else.** The
+  transport says so and cannot recover from a stray line — the client is
+  parsing every one. That is why the work layer takes a warning callback rather
+  than printing: `refigure export` sends "this build does not carry that font"
+  to stderr, and the MCP server puts the same sentence in the tool's own result,
+  because a model has no stderr to read. `mcp_test.go` fails the whole test if
+  any line of stdout is not a protocol message.
+- **A tool's own failure and a broken request are different answers.** A project
+  that does not validate, or a cut that is not there, comes back as a result
+  with `isError` and a sentence naming what is wrong — the model reads it and
+  tries again. An unknown tool or a malformed call is a JSON-RPC error, because
+  no rewording of the arguments will fix it. Getting this backwards either hides
+  a fixable mistake from the model or feeds it an error it cannot act on.
+- **No MCP library, and two eras of the protocol.** On stdio the protocol is
+  newline-delimited JSON-RPC, so `encoding/json` is the whole dependency —
+  which is the same reason there are five in the repository at all. The server
+  answers both the `initialize` handshake older clients open with and the
+  per-request `_meta` of revision 2026-07-28, because which one it meets depends
+  entirely on how old the client is. A result is stamped `resultType` only for a
+  request that arrived speaking the newest revision; an older client has no
+  schema for the field.
+
 - **Figures are in screen coordinates, never cut coordinates.** `render.Cut`
   translates the whole scene by `-rect.X, -rect.Y` and then draws figures at
   their stored coordinates. Do not pre-subtract anywhere else.
@@ -160,7 +197,7 @@ itself.
 
 ## Testing
 
-`make test` — 47 tests, no fixtures on disk; every test builds its own project
+`make test` — 104 tests, no fixtures on disk; every test builds its own project
 or image. **Run it through `make`, not as a bare `go test ./...`**: see the
 caching note at the end of this section.
 
@@ -171,12 +208,27 @@ caching note at the end of this section.
   overlap, the shared text approximation, multiline text, exclusion.
 - `internal/export` — ownership and exclusion end to end, downscale never
   enlarging, extensions, name collisions, `--only`, zero-sized cuts, the cascade.
+- `internal/mcp` — the protocol through a pair of buffers, so no subprocess is
+  needed: a notification is never answered (answer one and the reply arrives as
+  the answer to whatever the client asks next), a message with newlines in it
+  still leaves as one line, the handshake answers with a revision the server
+  speaks, an unknown revision is refused with the list to choose from *and*
+  before the tool runs, a tool's failure is a result while a bad request is an
+  error, and a tool that panics is an error the client can read rather than a
+  process that has gone.
 - `internal/render` — real pixels: the cut crops to its rectangle, a figure at
   screen (60,50) lands at (10,10) inside a cut starting at (50,40), an arrow
   head is wider than its shaft and measures the stroked width Konva gives it,
   a rectangle's edges are straight and its dashes are not lengthened by round
   caps, a dashed line leaves gaps, a missing font is reported, a bad colour is
   an error.
+- `cmd/refigure/mcp_test.go` — the server driven the way a client drives it, as
+  a subprocess: the tools are the commands and are annotated so a client knows
+  which one writes files, the export tool writes the images it says it wrote and
+  a dry run writes none, the preview comes back as a PNG of the size its caption
+  claims, the missing-font warning reaches the model and never reaches stdout,
+  and the `schema` tool prints exactly what `refigure schema` prints — one voice
+  for the person and the agent.
 - `cmd/refigure` — the command surface, driven as a subprocess. The
   self-describing part: every command explains itself and exits 0, `help export`
   and `export --help` agree, the help names no flag the binary lacks, the

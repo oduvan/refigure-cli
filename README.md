@@ -84,11 +84,13 @@ refigure export   [project] [flags]   write one image per cut
 refigure list     [project] [flags]   what would be written, and at what size
 refigure validate [project] [flags]   check refigure.yaml
 refigure schema            [flags]    describe the project file format
+refigure mcp      [project]           serve the Model Context Protocol
 refigure version
 refigure help [command]
 ```
 
-Every command takes `--help` and `--json`.
+Every command takes `--help`; `export`, `list`, `validate` and `schema` take
+`--json`.
 
 The project defaults to the current directory.
 
@@ -180,6 +182,41 @@ ignores unknown keys on purpose, which is exactly what makes a typo invisible),
 an id used twice, a figure owned by a cut that does not exist and therefore
 appears nowhere, two cuts whose images would overwrite each other, a missing
 screenshot, a cut with no area or one running off the edge.
+
+## From an agent
+
+`refigure mcp` serves the [Model Context Protocol](https://modelcontextprotocol.io)
+over stdin and stdout, so an assistant that edits a project file can also check
+what it wrote and look at the result. It is the same binary and the same jobs —
+a client starts it as a subprocess:
+
+```json
+{
+  "mcpServers": {
+    "refigure": { "command": "refigure", "args": ["mcp", "/path/to/project"] }
+  }
+}
+```
+
+| Tool | What it does |
+|---|---|
+| `schema` | The format: prose, a complete example, or a JSON Schema. |
+| `validate` | Every problem at once, with the line each is on. |
+| `list` | What an export would write, and at what size. |
+| `export` | Write one image per cut. The only tool here that writes anything. |
+| `preview` | Draw one cut and hand it back **as an image**. |
+
+`preview` is the one with no command behind it, and it is the reason to use the
+server rather than the binary: something that has just written twenty lines of
+YAML has no other way to see what they draw. It writes nothing to disk.
+
+The project folder named on the command line is what every tool uses unless a
+call names another, so a client set up for one project does not have to repeat
+it. Nothing here writes `refigure.yaml` — that is the desktop app's job, or
+yours.
+
+Both eras of the protocol work: the `initialize` handshake older clients open
+with, and the per-request metadata of revision 2026-07-28.
 
 ## The project file
 

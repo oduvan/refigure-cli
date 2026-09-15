@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -20,19 +21,25 @@ func Encode(img image.Image, path string, outputFormat format.ExportFormat, qual
 		return err
 	}
 	defer file.Close()
+	return EncodeTo(file, img, outputFormat, quality)
+}
 
+// EncodeTo writes one image to any stream. It is the same encoder Encode uses,
+// separated because an image is not always going to a file: `refigure mcp`
+// hands one back to the caller in the answer itself.
+func EncodeTo(w io.Writer, img image.Image, outputFormat format.ExportFormat, quality int) error {
 	switch outputFormat {
 	case format.FormatPNG:
 		encoder := png.Encoder{CompressionLevel: png.BestCompression}
-		return encoder.Encode(file, img)
+		return encoder.Encode(w, img)
 	case format.FormatJPEG:
-		return jpeg.Encode(file, flatten(img), &jpeg.Options{Quality: quality})
+		return jpeg.Encode(w, flatten(img), &jpeg.Options{Quality: quality})
 	case format.FormatWebP:
 		// libwebp compiled to WASM and run by wazero: real lossy WebP with a
 		// working quality knob, and still no cgo. It costs about 3.5 MB of
 		// binary, which is the right trade for matching what the desktop app's
 		// sharp pipeline produces.
-		return webp.Encode(file, img, webp.Options{Quality: quality})
+		return webp.Encode(w, img, webp.Options{Quality: quality})
 	}
 	return fmt.Errorf("unknown export format %q", outputFormat)
 }
