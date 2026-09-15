@@ -22,8 +22,6 @@ import (
 
 	"github.com/oduvan/refigure-cli/internal/export"
 	"github.com/oduvan/refigure-cli/internal/format"
-	"github.com/oduvan/refigure-cli/internal/lint"
-	"github.com/oduvan/refigure-cli/internal/render"
 	_ "golang.org/x/image/webp"
 )
 
@@ -71,11 +69,12 @@ Usage:
   refigure list     [project] [flags]   what would be written, and at what size
   refigure validate [project] [flags]   check refigure.yaml
   refigure schema            [flags]    describe the project file format
+  refigure mcp      [project]           serve the Model Context Protocol
   refigure version
   refigure help [command]
 
 The project defaults to the current directory.
-Every command takes --help. Every command takes --json.
+Every command takes --help; export, list, validate and schema take --json.
 
 Exit codes:
   0  success
@@ -88,6 +87,9 @@ Writing a project file? Start with:
   refigure schema --json      the same as a JSON Schema
 Then check what you wrote:
   refigure validate --json    every problem at once, with line numbers
+
+Driving this from an agent? "refigure mcp" offers these same jobs as tools, and
+one the command line has no use for: a rendered cut handed back as an image.
 `
 
 const exportUsage = `refigure export [project] [flags] — write one image per cut
@@ -196,6 +198,8 @@ func main() {
 		os.Exit(runValidate(args))
 	case "schema":
 		os.Exit(runSchema(args))
+	case "mcp":
+		os.Exit(runMCP(args))
 	case "version", "--version", "-v":
 		fmt.Println(reportedVersion())
 	case "help", "--help", "-h":
@@ -221,6 +225,8 @@ func helpFor(args []string) string {
 		return validateUsage
 	case "schema":
 		return schemaUsage
+	case "mcp":
+		return mcpUsage
 	default:
 		return usage
 	}
@@ -255,122 +261,33 @@ func runExport(args []string) int {
 	progress := flags.Bool("progress", false, "report each image on stderr as it is written")
 	dir := parseDir(flags, args)
 
-	project, code := load(dir)
-	if project == nil {
-		return code
+	req := exportRequest{
+		Dir:      dir,
+		Out:      *out,
+		Format:   *outputFormat,
+		Quality:  *quality,
+		Scale:    *scale,
+		Original: *original,
+		Only:     splitList(*only),
+		OnlyIDs:  splitList(*onlyIDs),
+		DryRun:   *dryRun,
 	}
 
-	opts := export.Options{Original: *original, MaxWidth: *scale}
-	if *only != "" {
-		opts.Only = strings.Split(*only, ",")
-	}
-	if *onlyIDs != "" {
-		opts.OnlyIDs = strings.Split(*onlyIDs, ",")
-	}
-	if *outputFormat != "" {
-		opts.Format = format.ExportFormat(*outputFormat)
-	}
-
-	plan, err := export.Build(project, opts)
-	if err != nil {
-		return fail(err)
-	}
-	if len(plan.Items) == 0 {
-		// Name whichever filter was actually used: a caller passing ids and
-		// being told about --only has to go and read the flags to find out
-		// which of the two it means.
-		switch {
-		case *onlyIDs != "":
-			return fail(fmt.Errorf("nothing to export — no cut in this project has one of those ids"))
-		case *only != "":
-			return fail(fmt.Errorf("nothing to export — --only %q matched no cut or screen", *only))
-		default:
-			return fail(fmt.Errorf("nothing to export — the project has no cuts"))
-		}
-	}
-
-	dest := *out
-	if dest == "" {
-		dest = project.Export.Dest
-	}
-	if dest == "" {
-		return fail(fmt.Errorf("no output directory — pass --out, or set `export.dest` in the project"))
-	}
-	if !filepath.IsAbs(dest) {
-		dest = filepath.Join(project.Dir, dest)
-	}
-
-	for _, name := range plan.Collisions {
-		warn("two cuts are both named %q, so one image will overwrite the other", strings.TrimSuffix(name, filepath.Ext(name)))
-	}
-
-	if *dryRun {
-		return report(*asJSON, dest, plan, nil, true)
-	}
-
-	if err := export.EnsureDir(dest); err != nil {
-		return fail(err)
-	}
-
-	outputFmt := project.Export.Format
-	if opts.Format != "" {
-		outputFmt = opts.Format
-	}
-	q := project.Export.Quality
-	if *quality > 0 {
-		q = *quality
-	}
-
-	missingFonts := map[string]bool{}
-	renderOpts := render.Options{
-		OnMissingFont: func(family string) {
-			if !missingFonts[family] {
-				missingFonts[family] = true
-				warn("this build does not carry the font %q, so text is drawn in %s — the editor falls back the same way, so the image still matches it",
-					family, render.FallbackFamily)
-			}
-		},
-	}
-
-	screenshots := map[string]image.Image{}
-	var written []string
-
-	for _, item := range plan.Items {
-		screenshot, ok := screenshots[item.Screen.File]
-		if !ok {
-			loaded, err := loadImage(filepath.Join(project.Dir, item.Screen.File))
-			if err != nil {
-				return fail(fmt.Errorf("screen %q: %w", item.Screen.Name, err))
-			}
-			screenshots[item.Screen.File] = loaded
-			screenshot = loaded
-		}
-
-		screen := item.Screen
-		img, err := render.Cut(screenshot, item.Rect, item.Figures, func(f *format.Figure) format.ResolvedStyle {
-			return project.StyleFor(screen, f)
-		}, renderOpts)
-		if err != nil {
-			return fail(fmt.Errorf("cut %q: %w", item.Cut.Name, err))
-		}
-
-		if item.Scale != 1 {
-			img = render.Resize(img, item.Width, item.Height)
-		}
-		if err := export.Encode(img, filepath.Join(dest, item.FileName), outputFmt, q); err != nil {
-			return fail(fmt.Errorf("cut %q: %w", item.Cut.Name, err))
-		}
-		written = append(written, item.FileName)
-
+	onProgress := func(int, int, string) {}
+	if *progress {
 		// Progress goes to stderr so stdout stays exactly what it was — human
 		// text, or one JSON document. A caller wanting a progress bar reads
 		// these lines; anyone else never sees them.
-		if *progress {
-			fmt.Fprintf(os.Stderr, "progress %d/%d %s\n", len(written), len(plan.Items), item.FileName)
+		onProgress = func(done, total int, fileName string) {
+			fmt.Fprintf(os.Stderr, "progress %d/%d %s\n", done, total, fileName)
 		}
 	}
 
-	return report(*asJSON, dest, plan, written, false)
+	outcome, err := performExport(req, func(message string) { warn("%s", message) }, onProgress)
+	if err != nil {
+		return failWith(err)
+	}
+	return report(*asJSON, outcome)
 }
 
 func runList(args []string) int {
@@ -382,13 +299,9 @@ func runList(args []string) int {
 	asJSON := flags.Bool("json", false, "machine-readable output")
 	dir := parseDir(flags, args)
 
-	project, code := load(dir)
-	if project == nil {
-		return code
-	}
-	plan, err := export.Build(project, export.Options{})
+	plan, err := performList(dir)
 	if err != nil {
-		return fail(err)
+		return failWith(err)
 	}
 
 	if *asJSON {
@@ -410,31 +323,9 @@ func runValidate(args []string) int {
 	strict := flags.Bool("strict", false, "treat warnings as failures")
 	dir := parseDir(flags, args)
 
-	project, err := format.Load(dir)
-	if err != nil {
-		// The file could not be read at all, so there is nothing to check
-		// beyond saying where it went wrong.
-		problem := lint.Problem{Severity: lint.SeverityError, Message: err.Error()}
-		var formatErr *format.Error
-		if errors.As(err, &formatErr) {
-			problem.Message, problem.Line = formatErr.Message, formatErr.Line
-		}
-		return reportValidation(*asJSON, 0, 0, []lint.Problem{problem})
-	}
-
-	cuts := 0
-	for _, screen := range project.Screens {
-		cuts += len(screen.Cuts)
-	}
-
-	// The raw bytes again, for line numbers and for the keys nobody read.
-	var problems []lint.Problem
-	if data, readErr := os.ReadFile(filepath.Join(dir, format.ProjectFile)); readErr == nil {
-		problems = lint.Check(dir, data, project)
-	}
-
-	code := reportValidation(*asJSON, len(project.Screens), cuts, problems)
-	if code == 0 && *strict && len(problems) > 0 {
+	result := performValidate(dir)
+	code := reportValidation(*asJSON, result)
+	if code == 0 && *strict && len(result.Problems) > 0 {
 		return 1
 	}
 	return code
@@ -442,23 +333,16 @@ func runValidate(args []string) int {
 
 // reportValidation prints every problem at once. A caller fixing a file wants
 // the whole list, not the first thing that went wrong followed by another run.
-func reportValidation(asJSON bool, screens, cuts int, problems []lint.Problem) int {
-	failed := false
-	for _, problem := range problems {
-		if problem.Severity == lint.SeverityError {
-			failed = true
-		}
-	}
-
+func reportValidation(asJSON bool, result validationResult) int {
 	if asJSON {
-		emit(validationResult{OK: !failed, Screens: screens, Cuts: cuts, Problems: problems})
-		if failed {
+		emit(result)
+		if !result.OK {
 			return 2
 		}
 		return 0
 	}
 
-	for _, problem := range problems {
+	for _, problem := range result.Problems {
 		where := ""
 		if problem.Line > 0 {
 			where = fmt.Sprintf("line %d: ", problem.Line)
@@ -469,22 +353,16 @@ func reportValidation(asJSON bool, screens, cuts int, problems []lint.Problem) i
 		}
 	}
 
-	if failed {
+	if !result.OK {
 		return 2
 	}
-	if len(problems) > 0 {
-		fmt.Printf("ok — %d screens, %d cuts, %d warning%s\n", screens, cuts, len(problems), plural(len(problems)))
+	if len(result.Problems) > 0 {
+		fmt.Printf("ok — %d screens, %d cuts, %d warning%s\n",
+			result.Screens, result.Cuts, len(result.Problems), plural(len(result.Problems)))
 		return 0
 	}
-	fmt.Printf("ok — %d screens, %d cuts\n", screens, cuts)
+	fmt.Printf("ok — %d screens, %d cuts\n", result.Screens, result.Cuts)
 	return 0
-}
-
-type validationResult struct {
-	OK       bool           `json:"ok"`
-	Screens  int            `json:"screens"`
-	Cuts     int            `json:"cuts"`
-	Problems []lint.Problem `json:"problems"`
 }
 
 func runSchema(args []string) int {
@@ -527,13 +405,24 @@ func parseDir(flags *flag.FlagSet, args []string) string {
 	return "."
 }
 
-func load(dir string) (*format.Project, int) {
-	project, err := format.Load(dir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "refigure: %s\n", err)
-		return nil, 2
+// splitList turns a comma-separated flag into the list the work layer takes.
+// An empty flag is no filter at all, not a filter matching the empty name.
+func splitList(value string) []string {
+	if value == "" {
+		return nil
 	}
-	return project, 0
+	return strings.Split(value, ",")
+}
+
+// failWith reports a failure and picks its exit code: 2 when the project file
+// could not be read, so a script can tell that apart from a failed write.
+func failWith(err error) int {
+	var unreadable unreadableProject
+	if errors.As(err, &unreadable) {
+		fmt.Fprintf(os.Stderr, "refigure: %s\n", err)
+		return 2
+	}
+	return fail(err)
 }
 
 func loadImage(path string) (image.Image, error) {
@@ -578,20 +467,20 @@ func planJSON(dest string, plan *export.Plan, written []string) output {
 	return result
 }
 
-func report(asJSON bool, dest string, plan *export.Plan, written []string, dryRun bool) int {
+func report(asJSON bool, outcome *exportOutcome) int {
 	if asJSON {
-		result := planJSON(dest, plan, written)
-		result.DryRun = dryRun
+		result := planJSON(outcome.Dest, outcome.Plan, outcome.Written)
+		result.DryRun = outcome.DryRun
 		return emit(result)
 	}
-	if dryRun {
-		for _, item := range plan.Items {
-			fmt.Printf("would write %s (%dx%d)\n", filepath.Join(dest, item.FileName), item.Width, item.Height)
+	if outcome.DryRun {
+		for _, item := range outcome.Plan.Items {
+			fmt.Printf("would write %s (%dx%d)\n", filepath.Join(outcome.Dest, item.FileName), item.Width, item.Height)
 		}
 		return 0
 	}
-	sort.Strings(written)
-	fmt.Printf("%d image%s written to %s\n", len(written), plural(len(written)), dest)
+	sort.Strings(outcome.Written)
+	fmt.Printf("%d image%s written to %s\n", len(outcome.Written), plural(len(outcome.Written)), outcome.Dest)
 	return 0
 }
 
