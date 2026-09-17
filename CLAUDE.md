@@ -197,7 +197,7 @@ itself.
 
 ## Testing
 
-`make test` — 104 tests, no fixtures on disk; every test builds its own project
+`make test` — 105 tests, no fixtures on disk; every test builds its own project
 or image. **Run it through `make`, not as a bare `go test ./...`**: see the
 caching note at the end of this section.
 

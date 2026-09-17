@@ -324,6 +324,23 @@ func TestToolsDescribeTheArgumentsTheyTake(t *testing.T) {
 	}
 }
 
+// A complete message with no newline after it is still a complete message.
+// Waiting for a delimiter that is never coming would lose the last thing a
+// client said before it closed the stream.
+func TestALastMessageWithNoNewlineIsStillAnswered(t *testing.T) {
+	var out strings.Builder
+	server := testServer(echoTool(nil))
+	if err := server.Serve(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`), &out); err != nil {
+		t.Fatalf("serving reported %v", err)
+	}
+	if out.String() == "" {
+		t.Fatal("the last message was dropped because nothing followed it")
+	}
+	if id := decode(t, strings.TrimSuffix(out.String(), "\n"))["id"]; id != float64(1) {
+		t.Errorf("answered id %v, want 1", id)
+	}
+}
+
 // A stream that stops mid-message is a client that went away, which is how
 // every session ends. It is not a failure to report.
 func TestAHalfWrittenMessageEndsTheSessionQuietly(t *testing.T) {
