@@ -2,28 +2,28 @@
 class Refigure < Formula
   desc "Export a Refigure project to images"
   homepage "https://github.com/oduvan/refigure-cli"
-  version "0.2.2"
+  version "0.2.3"
   license "MIT"
 
   on_macos do
     on_arm do
-      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.2/refigure_v0.2.2_darwin_arm64.tar.gz"
-      sha256 "e48cd0e4f8b169619e3b14a88a264d73a435023784d08220ece47edaecf78bb2"
+      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.3/refigure_v0.2.3_darwin_arm64.tar.gz"
+      sha256 "27686ed6e07097919a8f74010a3b6749eacc3de2245c4220a6aa7ccc59dd5a88"
     end
     on_intel do
-      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.2/refigure_v0.2.2_darwin_amd64.tar.gz"
-      sha256 "991e5b26a2c85d42ae5031afec8ef690322ef5776fa59ccf0020ab90be793800"
+      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.3/refigure_v0.2.3_darwin_amd64.tar.gz"
+      sha256 "1d11ddc09413a76b310e5ce391c8f3ad8f2ec8fbf1e1dc5da735e6e716c4bdf3"
     end
   end
 
   on_linux do
     on_arm do
-      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.2/refigure_v0.2.2_linux_arm64.tar.gz"
-      sha256 "73246d49c9f778a343a9f5990bd67b30a8fb1eda14aadb4f32f47754219b0b4a"
+      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.3/refigure_v0.2.3_linux_arm64.tar.gz"
+      sha256 "6dd689344f2b0bf8c5cb4de29bc4cc2069aedf2c3019e1fd2f669fd7f0c3c05c"
     end
     on_intel do
-      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.2/refigure_v0.2.2_linux_amd64.tar.gz"
-      sha256 "50fe4f13bd1e50008f687dc407902e2e3a4f68fbefa20aa18b2a29feec691df2"
+      url "https://github.com/oduvan/refigure-cli/releases/download/v0.2.3/refigure_v0.2.3_linux_amd64.tar.gz"
+      sha256 "b962ac8e146b50d81ddb43fde34ecaff9a75ede172af6024a7342da14ec29a25"
     end
   end
 
@@ -32,7 +32,7 @@ class Refigure < Formula
   end
 
   test do
-    assert_match "0.2.2", shell_output("#{bin}/refigure version")
+    assert_match "0.2.3", shell_output("#{bin}/refigure version")
     assert_match "refigure.yaml", shell_output("#{bin}/refigure schema")
   end
 end
